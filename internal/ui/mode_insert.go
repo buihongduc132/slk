@@ -79,6 +79,10 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if key.Matches(msg, a.keys.Escape) {
+		if a.zoomed {
+			a.zoomed = false
+			return nil
+		}
 		// If a picker is active, close it instead of exiting insert mode.
 		if a.focusedPanel == PanelThread && a.threadVisible {
 			if a.threadCompose.IsEmojiActive() {

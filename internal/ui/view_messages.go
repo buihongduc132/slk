@@ -85,7 +85,8 @@ func (a *App) renderMessagesRegion(frame panelLayoutFrame, themeVer int64, previ
 	// composeHeight bits 16+ (terminal rows, < 2^10), window id
 	// bits 32+ (wintree.LeafID increments per split; tiny).
 	msgLayoutKey := int64(a.focusedWin)<<32 |
-		themeVer<<3 |
+		themeVer<<4 |
+		boolToInt(a.zoomed)<<3 |
 		boolToInt(a.view == ViewThreads)<<2 |
 		boolToInt(msgFocused)<<1
 	a.compose.SetWidth(msgWidth - 2)

@@ -284,7 +284,7 @@ func (m *Model) filter() {
 		return matches[i].idx < matches[j].idx
 	})
 
-	for i := 0; i < len(matches) && i < 50; i++ {
+	for i := 0; i < len(matches); i++ {
 		m.filtered = append(m.filtered, matches[i].entry)
 	}
 	m.selected = 0

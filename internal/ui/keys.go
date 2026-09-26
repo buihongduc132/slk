@@ -68,6 +68,7 @@ type KeyMap struct {
 	WinOnly             key.Binding
 	ToggleBroadcast     key.Binding
 	OpenInEditor        key.Binding
+	Zoom                key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -148,5 +149,6 @@ func DefaultKeyMap() KeyMap {
 		ToggleBroadcast: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o / alt+enter", "also send reply to channel")),
 		// Shadows the textarea's own ctrl+e (LineEnd); "End" still works.
 		OpenInEditor: key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "edit message in $EDITOR")),
+		Zoom:         key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "zoom pane")),
 	}
 }

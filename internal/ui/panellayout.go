@@ -77,25 +77,30 @@ type panelLayoutFrame struct {
 //
 // Border bits are 2 cols on each non-rail pane (1 col left + 1 col
 // right rounded border).
-func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sidebarVisible, threadVisible, threadFront bool) panelLayoutFrame {
-	const (
-		statusHeight = 1
-		paneBorder   = 2 // left + right border cols
-		minMsgWidth  = 40
-		minThreadW   = 80
-		floorPaneW   = 10
-	)
+func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sidebarVisible, threadVisible, threadFront, zoomed bool) panelLayoutFrame {
+	statusHeight := 1
+	if zoomed {
+		statusHeight = 0
+		railWidth = 0
+		sidebarVisible = false
+	}
 	contentHeight := height - statusHeight
 
 	sbWidth := 0
 	sbBorder := 0
 	if sidebarVisible {
 		sbWidth = sidebarWidth
-		sbBorder = paneBorder
+		sbBorder = 2 // paneBorder
 	}
+	paneBorder := 2
 	msgAreaWidth := width - railWidth - sbWidth - sbBorder
 
 	var msgWidth, msgBorder, threadWidth, threadBorder int
+	const (
+		minMsgWidth = 40
+		minThreadW  = 80
+		floorPaneW  = 10
+	)
 	switch {
 	case !threadVisible:
 		msgWidth, msgBorder = msgAreaWidth-paneBorder, paneBorder

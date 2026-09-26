@@ -147,6 +147,7 @@ type App struct {
 	width      int
 	height     int
 	keys       KeyMap
+	zoomed     bool
 
 	// cmdline accumulates the text typed at the vi-style ':' prompt
 	// while in ModeCommand. Owned by mode_command.go; always "" in
@@ -912,7 +913,7 @@ func (a *App) threadDrawnAlone() bool {
 	}
 	var scratch panelLayout
 	frame := scratch.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront())
+		a.sidebarVisible, a.threadVisible, a.threadInFront(), a.zoomed)
 	return frame.MsgWidth == 0
 }
 
@@ -921,7 +922,7 @@ func (a *App) threadDrawnAlone() bool {
 // assembled; tests call it instead of repeating Compute's arguments.
 func (a *App) computeFrame() panelLayoutFrame {
 	return a.layout.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront())
+		a.sidebarVisible, a.threadVisible, a.threadInFront(), a.zoomed)
 }
 
 func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -955,6 +956,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reduceNewMessagePicker,
 		reduceIO,
 		reduceMouse,
+		reduceZoom,
 	); handled {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -3299,9 +3301,11 @@ func (a *App) View() tea.View {
 	previewActive := a.preview.Active()
 
 	var panels []string
-	panels = append(panels, a.renderRail(frame.RailWidth, frame.ContentHeight, themeVer))
-	if a.sidebarVisible {
-		panels = append(panels, a.renderSidebar(frame.SidebarWidth, frame.SidebarBorder, frame.ContentHeight, themeVer))
+	if !a.zoomed {
+		panels = append(panels, a.renderRail(frame.RailWidth, frame.ContentHeight, themeVer))
+		if a.sidebarVisible {
+			panels = append(panels, a.renderSidebar(frame.SidebarWidth, frame.SidebarBorder, frame.ContentHeight, themeVer))
+		}
 	}
 	if frame.MsgWidth > 0 {
 		if s := a.renderWindowsRegion(frame, themeVer, previewActive); s != "" {
@@ -3315,7 +3319,10 @@ func (a *App) View() tea.View {
 		panels = append(panels, a.renderPreviewPanel(frame))
 	}
 
-	status := a.renderStatusRow(frame.RailWidth, a.width-frame.RailWidth, themeVer)
+	status := ""
+	if !a.zoomed {
+		status = a.renderStatusRow(frame.RailWidth, a.width-frame.RailWidth, themeVer)
+	}
 
 	// Compositor memo (Stage A). Skip the JoinHorizontal/JoinVertical
 	// re-composite when no overlay/preview is active and the panel
