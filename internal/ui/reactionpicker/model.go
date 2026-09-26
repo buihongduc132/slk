@@ -10,6 +10,7 @@ import (
 
 	"github.com/gammons/slk/internal/core"
 	slkemoji "github.com/gammons/slk/internal/emoji"
+	"github.com/gammons/slk/internal/fuzzy"
 	imgpkg "github.com/gammons/slk/internal/image"
 	"github.com/gammons/slk/internal/text"
 	"github.com/gammons/slk/internal/ui/messages"
@@ -244,19 +245,48 @@ func (m *Model) filter() {
 	q := text.Fold(m.query)
 	m.filtered = m.filtered[:0]
 
-	var substringMatches []core.EmojiEntry
-	for _, e := range m.allEmoji {
-		name := text.Fold(e.Name)
-		if strings.HasPrefix(name, q) {
-			m.filtered = append(m.filtered, e)
-		} else if strings.Contains(name, q) {
-			substringMatches = append(substringMatches, e)
-		}
-		if len(m.filtered)+len(substringMatches) >= 50 {
-			break
+	isFrecent := make(map[string]bool, len(m.frecent))
+	for _, f := range m.frecent {
+		isFrecent[f.Name] = true
+	}
+
+	type match struct {
+		entry   core.EmojiEntry
+		tier    fuzzy.Tier
+		score   int
+		idx     int
+		frecent bool
+	}
+	var matches []match
+	for i, e := range m.allEmoji {
+		tier, score, ok := fuzzy.Match(e.Name, q)
+		if ok {
+			matches = append(matches, match{
+				entry:   e,
+				tier:    tier,
+				score:   score,
+				idx:     i,
+				frecent: isFrecent[e.Name],
+			})
 		}
 	}
-	m.filtered = append(m.filtered, substringMatches...)
+
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].frecent != matches[j].frecent {
+			return matches[i].frecent // true comes before false
+		}
+		if matches[i].tier != matches[j].tier {
+			return matches[i].tier < matches[j].tier
+		}
+		if matches[i].tier == fuzzy.TierSubsequence && matches[i].score != matches[j].score {
+			return matches[i].score > matches[j].score
+		}
+		return matches[i].idx < matches[j].idx
+	})
+
+	for i := 0; i < len(matches) && i < 50; i++ {
+		m.filtered = append(m.filtered, matches[i].entry)
+	}
 	m.selected = 0
 }
 

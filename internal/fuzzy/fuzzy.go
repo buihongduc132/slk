@@ -13,6 +13,12 @@
 // mentionpicker, emojipicker and reactionpicker consume.
 package fuzzy
 
+import (
+	"strings"
+
+	"github.com/gammons/slk/internal/text"
+)
+
 // Tier classifies how well a folded query matches a folded candidate
 // name. Lower numeric values rank BETTER, mirroring the match tier
 // ordering channelfinder.filter already uses (tier 0 prefix, 1
@@ -45,8 +51,21 @@ const (
 // Both name and query are case- and accent-folded internally
 // (text.Fold semantics), so callers pass raw strings.
 func Match(name, query string) (tier Tier, score int, ok bool) {
-	_ = name
-	_ = query
+	if query == "" || name == "" {
+		return TierNone, 0, false
+	}
+	foldedName := text.Fold(name)
+	foldedQuery := text.Fold(query)
+
+	if strings.HasPrefix(foldedName, foldedQuery) {
+		return TierPrefix, 0, true
+	}
+	if strings.Contains(foldedName, foldedQuery) {
+		return TierSubstring, 0, true
+	}
+	if score, ok := SubsequenceScore(foldedName, foldedQuery); ok {
+		return TierSubsequence, score, true
+	}
 	return TierNone, 0, false
 }
 
@@ -59,9 +78,49 @@ func Match(name, query string) (tier Tier, score int, ok bool) {
 // inputs are expected already folded (matching the call shape the
 // extract leaves behind in channelfinder).
 func SubsequenceScore(name, query string) (int, bool) {
-	_ = name
-	_ = query
-	return 0, false
+	if query == "" {
+		return 0, false
+	}
+
+	score := 0
+	qi := 0
+	qrunes := []rune(query)
+	first, last := -1, -1
+	prevWasSep := true // start of string counts as a word boundary
+	for i, r := range name {
+		if qi >= len(qrunes) {
+			break
+		}
+		if r == qrunes[qi] {
+			if first < 0 {
+				first = i
+			}
+			last = i
+			score += 10
+			if prevWasSep {
+				score += 25 // word-boundary bonus
+			}
+			qi++
+		}
+		prevWasSep = isSeparator(r)
+	}
+	if qi < len(qrunes) {
+		return 0, false
+	}
+	// Tightness bonus
+	span := last - first + 1
+	if span > 0 {
+		score += 50 * len(qrunes) / span
+	}
+	return score, true
+}
+
+func isSeparator(r rune) bool {
+	switch r {
+	case '-', '_', '.', ' ', '/', ':':
+		return true
+	}
+	return false
 }
 
 // WordPrefix reports whether the folded query is a prefix of a whole
@@ -69,8 +128,19 @@ func SubsequenceScore(name, query string) (int, bool) {
 // mentionpicker separators: ' ', '-', '_', '.' (e.g. "widg" matches
 // "eng-widgets"). An empty query is not a word prefix.
 func WordPrefix(name, query string) bool {
-	_ = name
-	_ = query
+	if query == "" {
+		return false
+	}
+	foldedName := text.Fold(name)
+	foldedQuery := text.Fold(query)
+	if strings.HasPrefix(foldedName, foldedQuery) {
+		return false // whole-name prefix is not a word prefix
+	}
+	for _, sep := range []string{" ", "-", "_", "."} {
+		if strings.Contains(foldedName, sep+foldedQuery) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -79,7 +149,15 @@ func WordPrefix(name, query string) bool {
 // (e.g. "engwidgets" matches "eng-widgets"). An empty query is not a
 // squashed prefix.
 func SquashedPrefix(name, query string) bool {
-	_ = name
-	_ = query
-	return false
+	if query == "" {
+		return false
+	}
+	foldedName := text.Fold(name)
+	foldedQuery := text.Fold(query)
+
+	squashed := foldedName
+	for _, sep := range []string{" ", "-", "_", "."} {
+		squashed = strings.ReplaceAll(squashed, sep, "")
+	}
+	return strings.HasPrefix(squashed, foldedQuery)
 }

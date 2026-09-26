@@ -3,7 +3,7 @@ package mentionpicker
 import (
 	"strings"
 
-	"github.com/gammons/slk/internal/text"
+	"github.com/gammons/slk/internal/fuzzy"
 )
 
 // matchRank describes how well a candidate name matches the query.
@@ -45,26 +45,19 @@ func squash(s string) string {
 	return b.String()
 }
 
-// matchName ranks name against an already-folded query. squashedQuery is
-// the query with separators removed; the caller computes it once per
-// keystroke rather than per candidate.
+// matchName ranks name against an already-folded query. squashedQuery is ignored now.
 func matchName(name, query, squashedQuery string) matchRank {
 	if query == "" {
 		return rankPrefix
 	}
-	n := text.Fold(name)
-	if strings.HasPrefix(n, query) {
+	tier, _, ok := fuzzy.Match(name, query)
+	if ok && tier == fuzzy.TierPrefix {
 		return rankPrefix
 	}
-	// Word-boundary prefix: "widg" matches "eng-widgets". Runs of
-	// separators are handled naturally — each one starts a new word, and
-	// an empty word can only match an empty query, which returned above.
-	for i := 0; i < len(n); i++ {
-		if isSeparator(n[i]) && strings.HasPrefix(n[i+1:], query) {
-			return rankWord
-		}
+	if fuzzy.WordPrefix(name, query) {
+		return rankWord
 	}
-	if squashedQuery != "" && strings.HasPrefix(squash(n), squashedQuery) {
+	if fuzzy.SquashedPrefix(name, query) {
 		return rankSquashed
 	}
 	return rankNone

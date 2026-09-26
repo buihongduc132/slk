@@ -14,15 +14,45 @@ package cache
 // URL-or-"alias:target"). A cache miss is an EMPTY, non-nil map and
 // a nil error — never an error the UI has to surface.
 func (db *DB) CustomEmoji(teamID string) (map[string]string, error) {
-	_ = teamID
-	return nil, nil
+	rows, err := db.conn.Query("SELECT name, value FROM custom_emoji WHERE team_id = ?", teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string]string)
+	for rows.Next() {
+		var name, value string
+		if err := rows.Scan(&name, &value); err != nil {
+			return nil, err
+		}
+		res[name] = value
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // UpsertCustomEmoji replaces teamID's cached set with emojis in one
 // team-scoped transaction (DELETE the team's rows, INSERT the new
 // set). An empty map empties the team's set.
 func (db *DB) UpsertCustomEmoji(teamID string, emojis map[string]string) error {
-	_ = teamID
-	_ = emojis
-	return nil
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM custom_emoji WHERE team_id = ?", teamID); err != nil {
+		return err
+	}
+
+	for name, value := range emojis {
+		if _, err := tx.Exec("INSERT INTO custom_emoji (team_id, name, value) VALUES (?, ?, ?)", teamID, name, value); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }

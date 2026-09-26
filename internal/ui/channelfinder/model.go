@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/gammons/slk/internal/core"
+	"github.com/gammons/slk/internal/fuzzy"
 	"github.com/gammons/slk/internal/text"
 	"github.com/gammons/slk/internal/ui/messages"
 	"github.com/gammons/slk/internal/ui/overlay"
@@ -418,16 +419,13 @@ func (m *Model) filter() {
 
 	var matches []match
 	for _, i := range idxs {
-		name := text.Fold(m.items[i].Name)
-		switch {
-		case strings.HasPrefix(name, q):
-			matches = append(matches, match{idx: i, tier: 0})
-		case strings.Contains(name, q):
-			matches = append(matches, match{idx: i, tier: 1})
-		default:
-			if score, ok := subsequenceScore(name, q); ok {
-				matches = append(matches, match{idx: i, tier: 2, score: score})
-			}
+		name := m.items[i].Name // Note: fuzzy.Match expects raw strings, it will fold them internally
+		tier, score, ok := fuzzy.Match(name, m.query)
+		if ok {
+			matches = append(matches, match{idx: i, tier: int(tier) - 1, score: score})
+			// wait, Match returns TierPrefix (1), TierSubstring (2), TierSubsequence (3).
+			// channelfinder originally used 0 for prefix, 1 for substring, 2 for subsequence.
+			// so tier - 1 is perfect.
 		}
 	}
 
@@ -471,61 +469,6 @@ func (m *Model) typeRank(idx int) int {
 		return 1
 	}
 	return 0
-}
-
-// subsequenceScore returns a score and true if every rune of q appears in
-// name in order. The score rewards:
-//   - matches that hit word boundaries (start of name, or after a separator
-//     like '-', '_', '.', ' ', or '/')
-//   - tighter matches (smaller span between first and last matched rune)
-//
-// Both name and q are expected to already be lowercased.
-func subsequenceScore(name, q string) (int, bool) {
-	if q == "" {
-		return 0, true
-	}
-
-	score := 0
-	qi := 0
-	qrunes := []rune(q)
-	first, last := -1, -1
-	prevWasSep := true // start of string counts as a word boundary
-	for i, r := range name {
-		if qi >= len(qrunes) {
-			break
-		}
-		if r == qrunes[qi] {
-			if first < 0 {
-				first = i
-			}
-			last = i
-			score += 10
-			if prevWasSep {
-				score += 25 // word-boundary bonus
-			}
-			qi++
-		}
-		prevWasSep = isSeparator(r)
-	}
-	if qi < len(qrunes) {
-		return 0, false
-	}
-	// Tightness bonus: the closer first and last are, the better. Cap so a
-	// pathological long name can't dominate.
-	span := last - first + 1
-	if span > 0 {
-		// Up to ~50 points for a perfectly tight match (span == len(q)).
-		score += 50 * len(qrunes) / span
-	}
-	return score, true
-}
-
-func isSeparator(r rune) bool {
-	switch r {
-	case '-', '_', '.', ' ', '/', ':':
-		return true
-	}
-	return false
 }
 
 // lessNoQuery reports whether item a should sort before item b when no
