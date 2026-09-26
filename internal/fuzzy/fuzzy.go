@@ -105,15 +105,37 @@ func WordPrefix(name, query string) bool {
 	return false
 }
 
+// SquashedPrefix reports whether the query is a prefix of the name with
+// separators removed — "engwidgets" matches "eng-widgets" — but a join is
+// only allowed across a boundary whose words are both at least 3 runes.
+// Short words do not squash: Match("cs-product-triage", "csp") and
+// Match("rock-et", "rocket") must fall through to TierSubsequence (pinned
+// by TestMatch_SubsequenceInOrder / TestMatch_TierOrderingBeatsScore),
+// while SquashedPrefix("eng-widgets", "engwidgets") stays true.
 func SquashedPrefix(name, query string) bool {
 	if query == "" {
 		return false
 	}
 	foldedName := text.Fold(name)
 	foldedQuery := text.Fold(query)
-	squashed := foldedName
-	for _, sep := range []string{" ", "-", "_", "."} {
-		squashed = strings.ReplaceAll(squashed, sep, "")
+	words := strings.FieldsFunc(foldedName, func(r rune) bool {
+		return r == ' ' || r == '-' || r == '_' || r == '.'
+	})
+	if len(words) == 0 {
+		return false
 	}
-	return strings.HasPrefix(squashed, foldedQuery)
+	var b strings.Builder
+	b.Grow(len(foldedName))
+	for i, w := range words {
+		if i > 0 {
+			prev := words[i-1]
+			if len([]rune(prev)) < 3 || len([]rune(w)) < 3 {
+				// Short word: the boundary stays hard, so no
+				// query can prefix-match across it.
+				b.WriteByte('-')
+			}
+		}
+		b.WriteString(w)
+	}
+	return strings.HasPrefix(b.String(), foldedQuery)
 }
