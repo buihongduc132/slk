@@ -142,13 +142,13 @@ type App struct {
 	threadVisible  bool
 	// stackFront is the content pane (PanelMessages or PanelThread)
 	// that last had focus. Recorded by Update, read by threadInFront.
-	stackFront Panel
-	view       View
-	width      int
-	height     int
-	keys       KeyMap
-	zoomed     bool
-	zoomSavedYOffset int
+	stackFront             Panel
+	view                   View
+	width                  int
+	height                 int
+	keys                   KeyMap
+	zoomed                 bool
+	zoomSavedYOffset       int
 	zoomSavedSelectedIndex int
 
 	// cmdline accumulates the text typed at the vi-style ':' prompt

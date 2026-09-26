@@ -1587,7 +1587,6 @@ func run() error {
 			// picker pick up the full set. Runs unconditionally — see
 			// fetchWorkspaceEmoji for why the bootstrap subset must not
 			// be treated as an answer.
-			
 
 			// Fetch workspace usergroups in the background. When done,
 			// send a follow-up so render caches and compose pickers can

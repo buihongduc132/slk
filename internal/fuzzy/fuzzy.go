@@ -105,10 +105,12 @@ func WordPrefix(name, query string) bool {
 	return false
 }
 
-func SquashedPrefix(foldedName, foldedQuery string) bool {
-	if foldedQuery == "" {
+func SquashedPrefix(name, query string) bool {
+	if query == "" {
 		return false
 	}
+	foldedName := text.Fold(name)
+	foldedQuery := text.Fold(query)
 	squashed := foldedName
 	for _, sep := range []string{" ", "-", "_", "."} {
 		squashed = strings.ReplaceAll(squashed, sep, "")
