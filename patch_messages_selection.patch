@@ -1,0 +1,53 @@
+--- internal/ui/messages/model.go
++++ internal/ui/messages/model.go
+@@ -375,7 +375,14 @@
+ 		return
+ 	}
+ 	if m.selected != i {
+-		m.selected = i
++		old := m.selected
++		m.selected = i
++		if m.staleEntries == nil {
++			m.staleEntries = make(map[string]struct{})
++		}
++		if old >= 0 && old < len(m.messages) {
++			m.staleEntries[m.messages[old].TS] = struct{}{}
++		}
++		m.staleEntries[m.messages[i].TS] = struct{}{}
+ 		m.dirty()
+ 	}
+ }
+@@ -391,7 +398,14 @@
+ 	for i := range m.messages {
+ 		if m.messages[i].TS == ts {
+ 			if m.selected != i {
+-				m.selected = i
++				old := m.selected
++				m.selected = i
++				if m.staleEntries == nil {
++					m.staleEntries = make(map[string]struct{})
++				}
++				if old >= 0 && old < len(m.messages) {
++					m.staleEntries[m.messages[old].TS] = struct{}{}
++				}
++				m.staleEntries[m.messages[i].TS] = struct{}{}
+ 				m.dirty()
+ 			}
+ 			// Snap viewport to this message on the next View(). Uses
+@@ -420,7 +434,14 @@
+ 		}
+ 		if absoluteY >= currentLine && absoluteY < currentLine+entry.height {
+ 			if m.selected != entry.msgIdx {
+-				m.selected = entry.msgIdx
++				old := m.selected
++				m.selected = entry.msgIdx
++				if m.staleEntries == nil {
++					m.staleEntries = make(map[string]struct{})
++				}
++				if old >= 0 && old < len(m.messages) {
++					m.staleEntries[m.messages[old].TS] = struct{}{}
++				}
++				m.staleEntries[m.messages[m.selected].TS] = struct{}{}
+ 				m.dirty()
+ 			}
+ 			return true

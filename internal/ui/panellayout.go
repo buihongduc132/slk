@@ -102,6 +102,10 @@ func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sideba
 		floorPaneW  = 10
 	)
 	switch {
+	case zoomed && threadFront:
+		threadWidth, threadBorder = msgAreaWidth-paneBorder, paneBorder
+	case zoomed && !threadFront:
+		msgWidth, msgBorder = msgAreaWidth-paneBorder, paneBorder
 	case !threadVisible:
 		msgWidth, msgBorder = msgAreaWidth-paneBorder, paneBorder
 	case msgAreaWidth-2*paneBorder >= minMsgWidth+minThreadW:

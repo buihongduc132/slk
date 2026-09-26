@@ -1,0 +1,11 @@
+--- fullscreen_red_test.go
++++ fullscreen_red_test.go
+@@ -147,7 +147,7 @@
+ 	after := a.View().Content
+ 	if after != frameBefore {
+ 		t.Errorf("second 'z' did not restore the pre-zoom frame byte-for-byte (fs-restore-eq): \n%s",
+-			firstLineDiff(stripANSI(frameBefore), stripANSI(after)))
++			firstLineDiff(frameBefore, after))
+ 	}
+ 	// The restore includes pane state, not just layout: the selection
+ 

@@ -1,0 +1,13 @@
+--- internal/ui/fullscreen_red_test.go
++++ internal/ui/fullscreen_red_test.go
+@@ -14,2 +14,3 @@
+ 	"strings"
++	"os"
+ 	"testing"
+@@ -148,4 +149,6 @@
+ 	after := a.View().Content
+ 	if after != frameBefore {
++		os.WriteFile("/tmp/slk-fuzzy/frameBefore.txt", []byte(frameBefore), 0644)
++		os.WriteFile("/tmp/slk-fuzzy/after.txt", []byte(after), 0644)
+ 		t.Errorf("second 'z' did not restore the pre-zoom frame byte-for-byte (fs-restore-eq): %s",
+ 			firstLineDiff(stripANSI(frameBefore), stripANSI(after)))

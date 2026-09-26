@@ -1,0 +1,12 @@
+--- internal/ui/fullscreen_red_test.go
++++ internal/ui/fullscreen_red_test.go
+@@ -142,6 +142,7 @@
+ 	a := zoomedScrolledApp(t)
+ 	frameBefore := a.View().Content // second render; View is idempotent
++	t.Logf("Before focus: %v, m.focused: %v", a.focusedPanel, strings.Contains(frameBefore, "136;136;136;48;2;43"))
+ 
+ 	zoomed := mustEnterZoom(t, a, frameBefore)
+ 	assertZoomedFrame(t, a, zoomed, "msg-")
+ 
+ 	updateAndRender(t, a, keyPress('z'))
+ 	after := a.View().Content

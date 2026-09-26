@@ -3707,8 +3707,3 @@ func RemoveUserID(ids []string, userID string) []string {
 	}
 	return out
 }
-
-func (m *Model) SetViewport(yOffset, selectedIndex int) {
-	m.yOffset = yOffset
-	m.selected = selectedIndex
-}

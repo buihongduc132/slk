@@ -1,0 +1,12 @@
+--- model.go
++++ model.go
+@@ -1674,6 +1674,9 @@
+ 		avatarStr = m.avatarFn(msg.UserID)
+ 	}
+ 	rendered, attachFlushes, attachSixel, attachHits, reactHits := m.renderMessagePlain(msg, width, avatarStr, m.userNames, m.channelNames, i == m.selected, stats)
++	if i == 81 || i == 80 {
++		fmt.Printf("DEBUG renderMessageEntry row %d: m.focused=%v, hasGreen=%v, hasGray=%v\n", i, m.focused, strings.Contains(cs.borderSelect.Render(""), "80;200;120"), strings.Contains(cs.borderSelect.Render(""), "136;136;136"))
++	}
+ 	var bwT0 time.Time
+ 	if stats != nil {
+ 

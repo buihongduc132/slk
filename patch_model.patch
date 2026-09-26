@@ -1,0 +1,10 @@
+--- internal/ui/messages/model.go
++++ internal/ui/messages/model.go
+@@ -37,2 +37,3 @@
+ 	"github.com/gammons/slk/internal/slackclient"
+ 	"github.com/gammons/slk/internal/ui/styles"
++	"fmt"
+@@ -107,2 +108,3 @@
+ func (m *Model) SelectByIndex(idx int) {
++	fmt.Printf("SelectByIndex called with %d\n", idx)
+ 	if idx < 0 {

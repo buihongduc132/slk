@@ -13,16 +13,20 @@ var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 	case tea.KeyMsg:
 		if key.Matches(msg, a.keys.Zoom) {
 			if a.mode == ModeNormal {
-				if !a.zoomed {
-					a.zoomSavedYOffset = a.messagepane.YOffset()
-					a.zoomSavedSelectedIndex = a.messagepane.SelectedIndex()
-				}
 				a.zoomed = !a.zoomed
+				if a.zoomed && a.focusedPanel != a.stackFront {
+					a.preZoomFocus = a.focusedPanel
+					a.focusedPanel = a.stackFront
+				} else if !a.zoomed && a.preZoomFocus != 0 {
+					a.focusedPanel = a.preZoomFocus
+					a.preZoomFocus = 0
+				}
 				a.invalidateAllWinModelCaches()
 				a.threadPanel.InvalidateCache()
-				if !a.zoomed {
-					a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
+				if m, ok := a.messagepane.SelectedMessage(); ok {
+					a.messagepane.SelectByTS(m.TS)
 				}
+				a.forceSixelRepaint = true
 				return nil, true
 			}
 		}
@@ -31,16 +35,23 @@ var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 			// suppression toasts for G5
 			s := msg.String()
 			isAltNumber := strings.HasPrefix(s, "alt+") && len(s) == 5 && s[4] >= '1' && s[4] <= '9'
-			isAltNumber = isAltNumber || (len(s) == 1 && s[0] >= '1' && s[0] <= '9')
+			isAltNumber = isAltNumber || (len(s) == 1 && s[0] >= '1' && s[0] <= '9') 
 			if key.Matches(msg, a.keys.ToggleSidebar, a.keys.WindowPrefix) || isAltNumber || key.Matches(msg, a.keys.WorkspaceSearch, a.keys.WorkspaceFinder) {
 				return a.uploadToastCmd("Action not available while zoomed", 2*time.Second), true
 			}
 			// esc precedence
 			if key.Matches(msg, a.keys.Escape) {
 				a.zoomed = false
+				if a.preZoomFocus != 0 {
+					a.focusedPanel = a.preZoomFocus
+					a.preZoomFocus = 0
+				}
 				a.invalidateAllWinModelCaches()
 				a.threadPanel.InvalidateCache()
-				a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
+				if m, ok := a.messagepane.SelectedMessage(); ok {
+					a.messagepane.SelectByTS(m.TS)
+				}
+				a.forceSixelRepaint = true
 				return nil, true
 			}
 		}

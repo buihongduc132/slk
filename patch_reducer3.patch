@@ -1,0 +1,36 @@
+--- internal/ui/reducer_zoom.go
++++ internal/ui/reducer_zoom.go
+@@ -3,6 +3,7 @@
+ import (
+ 	"strings"
+ 	"time"
++	"fmt"
+ 
+ 	"charm.land/bubbles/v2/key"
+ 	tea "charm.land/bubbletea/v2"
+@@ -17,6 +18,11 @@
+ 				if a.zoomed && a.focusedPanel != a.stackFront {
+ 					a.focusedPanel = a.stackFront
+ 				}
++				fmt.Printf("Before Invalidate: idx=%d\n", a.messagepane.SelectedIndex())
+ 				a.invalidateAllWinModelCaches()
+ 				a.threadPanel.InvalidateCache()
++				fmt.Printf("After Invalidate: idx=%d\n", a.messagepane.SelectedIndex())
++				if m, ok := a.messagepane.SelectedMessage(); ok {
++					fmt.Printf("Selected TS=%s\n", m.TS)
++					a.messagepane.SelectByTS(m.TS)
++					fmt.Printf("After SelectByTS: idx=%d\n", a.messagepane.SelectedIndex())
++				}
+ 				a.forceSixelRepaint = true
+ 				return nil, true
+ 			}
+@@ -39,6 +45,10 @@
+ 				a.zoomed = false
+ 				a.invalidateAllWinModelCaches()
+ 				a.threadPanel.InvalidateCache()
++				if m, ok := a.messagepane.SelectedMessage(); ok {
++					a.messagepane.SelectByTS(m.TS)
++				}
+ 				a.forceSixelRepaint = true
+ 				return nil, true
+ 			}

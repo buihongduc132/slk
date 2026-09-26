@@ -1562,6 +1562,7 @@ func run() error {
 
 			readyStatuses := cachedPeerStatuses(db, wctx.TeamID)
 			wctx.PeerStatus.SeedHuddles(readyStatuses)
+			go runStartupEmoji(ctx, wctx, db, wctx.Client, p, wctx.TeamID)
 			p.Send(ui.WorkspaceReadyMsg{
 				TeamID:           wctx.TeamID,
 				TeamName:         wctx.TeamName,
@@ -1586,7 +1587,7 @@ func run() error {
 			// picker pick up the full set. Runs unconditionally — see
 			// fetchWorkspaceEmoji for why the bootstrap subset must not
 			// be treated as an answer.
-			go fetchWorkspaceEmoji(ctx, wctx, wctx.Client, p, wctx.TeamID)
+			
 
 			// Fetch workspace usergroups in the background. When done,
 			// send a follow-up so render caches and compose pickers can
