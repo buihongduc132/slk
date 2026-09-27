@@ -2079,6 +2079,30 @@ func (a *App) openThreadPanel(parent messages.MessageItem, channelID, threadTS s
 	return tea.Batch(batch...)
 }
 
+// disarmPendingChords drops any half-entered multi-key chord (ctrl+w …,
+// g …) and restores the default help hint.
+//
+// Both flags are consumed in handleNormalMode (mode_normal.go), which runs
+// AFTER the reducer chain, so any reducer that claims a key starves them.
+// Every state change that makes the chord's hint unreachable must call
+// this, or the chord stays armed with no affordance and silently eats the
+// user's next keystroke.
+//
+// Two callers today: SetMode (a global intercept such as the ctrl+c
+// quit-confirm) and the zoom transitions (which are NOT mode changes —
+// they stay in ModeNormal — and which hide the status row the hint lives
+// in). Pinned by TestFullscreen_ZoomTransitionDisarmsWindowChord.
+//
+// The `if` guard scopes the hint restore to actual disarms, so unrelated
+// helpHint states aren't clobbered.
+func (a *App) disarmPendingChords() {
+	if a.pendingWinCmd || a.pendingTop {
+		a.pendingWinCmd = false
+		a.pendingTop = false
+		a.statusbar.SetHelpHint(a.defaultHelpHint())
+	}
+}
+
 func (a *App) SetMode(mode Mode) {
 	// Global interrupts and workspace switches must abandon an unsubmitted
 	// forward, just like Esc, rather than leave a stale source armed.
@@ -2088,13 +2112,7 @@ func (a *App) SetMode(mode Mode) {
 	}
 	// A mode change always disarms a pending ctrl+w chord — a global
 	// intercept (e.g. ctrl+c quit-confirm) must not strand it armed.
-	// The `if` guard scopes the hint restore to chord disarms only, so
-	// other helpHint states aren't clobbered by unrelated mode changes.
-	if a.pendingWinCmd || a.pendingTop {
-		a.pendingWinCmd = false
-		a.pendingTop = false
-		a.statusbar.SetHelpHint(a.defaultHelpHint())
-	}
+	a.disarmPendingChords()
 	if mode == ModeInsert {
 		a.clearSelections()
 	}
@@ -2219,6 +2237,11 @@ func (a *App) ToggleThread() {
 
 func (a *App) CloseThread() {
 	a.clearSelections()
+	// fs-zoom-invariant: the zoomed pane may be the thread we are about to
+	// tear down. Dropping zoom here rather than in each caller covers `q`,
+	// ctrl+] and every programmatic close. clearZoom, not exitZoom -- the
+	// pane's content is going away, so the saved viewport is meaningless.
+	a.clearZoom()
 	a.threadVisible = false
 	a.statusbar.SetInThread(false)
 	a.threadPanel.Clear()

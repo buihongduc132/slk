@@ -323,6 +323,12 @@ func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 	if a.compose.Uploading() || a.threadCompose.Uploading() {
 		return a.uploadToastCmd("Upload in progress", 2*time.Second), false
 	}
+	// fs-zoom-invariant: the messages pane is about to be repointed at a
+	// different channel. clearZoom, not exitZoom -- exitZoom would stamp the
+	// OLD channel's saved offset and selected index onto the new channel's
+	// pane, and a shorter new channel makes that index out of range. Placed
+	// after the upload guard, which returns without applying the switch.
+	a.clearZoom()
 	// Perf instrumentation: wall-clock the synchronous portion of the
 	// channel-switch reducer. This covers everything up to and including
 	// the tier decision, but NOT the subsequent View() (which triggers
