@@ -184,3 +184,83 @@ _(populated by gotcha-coverage + re-runs)_
     assertion is not a write assertion. Separately, `_ = db.UpsertCustomEmoji(...)`
     means a full disk or lock timeout silently leaves the cache permanently
     stale, with no log line, unlike every comparable best-effort path here.
+    **Both fixed** in `40ae159`.
+
+12. **`fuzzy-emoji` is marked `[x]` with half of it unimplemented (B24)** —
+    Rank 4, and B13's class again. The item promises "recent (frecent) > prefix >
+    substring > subsequence" for BOTH the compose autocomplete and the reaction
+    picker. `emojipicker` has no frecent field, no `SetFrecentEmoji`, and the
+    string `frecent` appears **0 times** in the package against 5 in
+    `reactionpicker`; both `app.go` call sites target `a.reactionPicker`. So the
+    same ranking rule is implemented twice, divergently, inside the feature whose
+    purpose was one implementation — and with `MaxVisible = 5` the two emoji
+    surfaces disagree in their top rows. The DOD's proof obligation
+    (`:thumbs` → `+1` reachable) is satisfiable with no recent tier at all, so
+    the criterion could not catch it. **DECISION NEEDED**: wiring frecent into
+    emojipicker changes ranking users see and existing tests pin the current
+    order, so it is not a silent fix — it wants its own RED test and commit.
+    Until then the "compose autocomplete gets the same ranking" clause should
+    read `[ ]`.
+
+13. **The plan undercounts its own tier set, and three consequences follow
+    (B25, B28, B30)** — all Rank 3–4. `fuzzy-reactionpicker-migration` says the
+    tier set grew to "4 tiers"; the enum has five plus `TierNone`
+    (`TierPrefix`, `TierWordPrefix`, `TierSquashedPrefix`, `TierSubstring`,
+    `TierSubsequence`). From that one miscount: `channelfinder` re-derives tier
+    numbers as `int(tier) - 1` against the old 3-tier scheme, with unreviewed
+    model reasoning left in the production file ("wait, Match returns TierPrefix
+    (1)…so tier - 1 is perfect") and a struct field still documented `// 0
+    prefix, 1 substring, 2 subsequence`; `mentionpicker` carries a dead
+    `squashedQuery` parameter from the old predicate, with `squash` still
+    computed, still declared, and still tested; and the tier-order test pins only
+    3 of the 5 real tiers, so the two new constants can be reordered with the
+    whole suite green. **Nothing is live-broken** — `int(tier) - 1` is monotone
+    and the sort only compares those values — but the latent trap is exact:
+    reorder the enum and channelfinder's local numbering corrupts silently with
+    no test failing. The behaviour question underneath (names now landing in
+    WordPrefix/SquashedPrefix outranking true substring hits, and squashed hits
+    losing their positive subsequence score) is plausible and **untested**; it
+    wants a test per tier boundary. B25's comments and B30's test are cheap fixes;
+    B28 is a mechanical deletion.
+
+14. **`fuzzy.Match` re-folds already-folded strings (B26)** — Rank 4, and
+    invisible to every test because it is cost, not behaviour. `Match` folds both
+    arguments, then passes the folded pair into `WordPrefix` and
+    `SquashedPrefix`, **each of which folds both again** (2 `text.Fold` calls
+    apiece, verified by whole-function count). Per candidate on the deepest path
+    the name is folded 3× and the query 3× — and all three consumers already fold
+    the query once outside the loop and pass it in, so that outer fold is undone
+    immediately. Folding is idempotent, so no answer is wrong. But
+    `internal/text/fold.go`'s own comment records why this shape was removed:
+    *"reaction picker 271 ms / 1.12 GB / 768k allocs -> 2.96 ms / 611 B / 1
+    alloc. See issue #165."* A closed, measured, documented fix regressed by a
+    refactor that never named it as an invariant. Wants a `Matcher` that folds
+    the query once, unexported no-fold internals, and a benchmark with a
+    non-ASCII query as the guard.
+
+15. **"Word boundary" has four definitions, three inside `internal/fuzzy`
+    (B27)** — Rank 3. `fuzzy.isSeparator` treats `- _ . space / :` as
+    separators; `fuzzy.WordPrefix` uses `" " - _ .`; `fuzzy.SquashedPrefix`'s
+    `FieldsFunc` uses space `- _ .`; `mentionpicker.isSeparator` uses the same
+    four at byte level. So `/` and `:` are word boundaries for subsequence
+    scoring and nothing else — and for emoji names, which lean on `-` and `_` and
+    whose trigger character is `:`, the tier a candidate lands in depends on
+    which definition that tier's predicate happens to use. The plan merged the
+    two sources' *predicates* verbatim without merging their notion of a
+    separator: "extract the substrate, not the widget" applied to the scoring
+    functions but not to the value underneath them. Wants one exported
+    `fuzzy.IsSeparator(rune)`, all four sites routed through it, and a
+    deliberate decision about `/` and `:` written as a test.
+
+16. **Both candidate pools sort on RAW `Name` while all comparison is folded
+    (B29)** — Rank 3. `internal/emoji/entries.go:68` sorts on unfolded `Name`,
+    so a custom emoji named `Rocket` sorts before every lowercase name and wins
+    every within-tier tie against `rocket`. Slack lowercases on upload, but these
+    rows now arrive from the `custom_emoji` cache table and nothing in that write
+    path normalizes case. Separately, emojipicker's input-order precondition is
+    prose on an exported type ("Callers must pass alphabetically-sorted
+    entries…") with no assertion — the pattern AGENTS.md says to replace with a
+    check. Useful negative result from the same probe, recorded so nobody
+    re-checks it: **Go map iteration order does not reach the output** — both
+    pools sort by unique `Name` after their map walk, both dedup first, the
+    within-tier tie-break is a unique `idx`, and `frecentRank` is lookup-only.
