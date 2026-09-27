@@ -347,3 +347,127 @@ _(populated by gotcha-coverage + re-runs)_
       in that suite must either mask volatile regions (presence glyphs, clock,
       unread badges) or stay informational. Do not "fix" it by re-blessing a
       live capture.
+
+20. **The suppression UX is invisible, and the zoomed pane's last row is not
+    clickable (B45, B46)** — both Rank 5, both live in merged and deployed code,
+    both `B13`'s class again: an item marked `[x]` whose oracle observes a
+    subject the defect cannot reach. From batch 4 of the delegated pass.
+    - **B45**: the suppression toast goes to `a.statusbar.SetToast`
+      (`app.go:4198`), but `app.go:3384-3386` sets `status := ""` while zoomed so
+      `renderStatusRow` is never called. Every suppressed key — `ctrl+b`,
+      `ctrl+]`, `ctrl+t`, `:`, `/`, workspace digits — is a silent no-op with no
+      feedback. The oracle is `statusbarText(a)`, a *model* getter, so the
+      assertion's subject is set unconditionally and cannot vary with whether the
+      row is composited.
+    - **B46**: the status-row height rule is implemented **three times** —
+      `Compute` (zoom-aware, `panellayout.go:81-87`), `PanelAt` (literal
+      `height-1`, **no `zoomed` parameter**, `:157-159`, and `app.go:1829` passes
+      none), and `reduceMouseClick` (its own `statusHeight := 1`,
+      `reducer_mouse.go:192`). So the pane draws on the last terminal row and both
+      hit-test paths discard clicks there. `fs-statusrow-math`'s central claim is
+      false; a golden cannot fail on a hit-test, so the render half was proven and
+      the routing half assumed.
+    - Resolution for B46 is the mandated one: **delete the two literals**, store
+      `statusHeight` on `panelLayout` where `Compute` already computes it. Do not
+      add a `zoomed` parameter callers can forget. For B45, pick one of the three
+      surfaces in `slk-fullscreen-emoji-fuzzy-gotcha-batch4.md` and **re-point the
+      oracle at the rendered frame**.
+    - `fs-statusrow-math` and `fs-supp-set` should read `[ ]` until both land.
+
+21. **Suppression covers one door, not the room; and `z` does not zoom the
+    focused pane (B47, B48)** — Rank 4. `internal/ui/command.go` has **zero**
+    zoom references: `:sp/:vsp/:only/:q` are unguarded, and only the `:` keypress
+    in normal mode is suppressed, which makes fs-supp-set's "both surfaces"
+    claim vacuously true. `windowBounds` compounds it by calling `Compute` with a
+    hardcoded `threadFront=false` plus the live `a.zoomed` (`windows.go:53-55`),
+    so a split created while zoomed is laid out against the zoomed rectangle —
+    reachable today by any non-key caller.
+    - B48 is a **spec/code divergence, not a logic bug**, and the delegate had it
+      backwards: `zoomFrontIsThread`'s own doc (`app.go:931-945`) states the
+      behaviour is deliberate and G15-motivated ("probing the unzoomed layout
+      rather than reading focusedPanel is what keeps Tab from flipping WHICH pane
+      is zoomed"). So at any width where both panes fit, `z` promotes MESSAGES
+      regardless of focus or `stackFront` — and the **plan text is what is
+      stale**. DECISION NEEDED: rewrite fs-layout/fs-scope to match G15, or latch
+      the zoomed pane at `enterZoom` and keep the units' rule.
+
+22. **dod-3 is contradicted by its own oracle in two of three assertions (B32,
+    B38, B42), and no emojipicker test pins the real tier order (B33)** — B32 is
+    Rank 5. The criterion claims `:thumbs` → `+1` is *proven*; the cited file
+    contains a **negative guard** asserting `+1` matches no tier
+    (`emojipicker/fuzzy_test.go:135-137`), and no alias table exists anywhere in
+    the package. The substitution is documented *in the test* at :230-235 — so
+    this is not undetected drift, it is knowledge that lived in the test and never
+    propagated to the criterion it invalidates. Same shape for "out-of-order"
+    (B38): `TestFuzzy_OutOfOrderQueryMatchesNothing:113` pins in-order semantics
+    (G10), so the DOD describes a guarded non-feature as delivered.
+    - **B33** is the consumer half of the now-fixed B30: pinning the tier
+      constants by value stops a renumber but does **not** prove emojipicker
+      *ranks* by them. `TierWordPrefix` and `TierSquashedPrefix` have zero
+      ordering coverage in that package, and hyphenated custom-emoji names make
+      WordPrefix the common real case (`party-parrot` matched on `parrot`).
+    - **B42**: `rocket` actually ranks **2nd** for the DOD's own query (recorded
+      at `fuzzy_test.go:21-23`), and the oracle deliberately asserts only top-3
+      membership. Same example as **OT6**, failing a second, independent way.
+
+23. **dod-4's "existing harnesses only" is false, and three of the new helpers
+    are already duplicated (B34)** — Rank 4, and AGENTS.md's stated top defect
+    mode occurring *inside the feature whose DOD claims it did not*. Eight
+    helpers are unregistered (`zoomedScrolledApp`, `mustEnterZoom`,
+    `assertZoomedFrame`, `firstLineDiff`, `stripANSI`, `entriesFor`,
+    `filteredNames`, `containsName` — all verified absent from the AGENTS.md
+    table), and three already exist **twice**: `stripANSI`
+    (`golden_test.go:131` + `statusbar/model_test.go:353`), `filteredNames` and
+    `containsName` (both `emojipicker/fuzzy_test.go` + `reactionpicker/fuzzy_test.go`).
+    The picker pair is the sharp one: two packages this plan set out to unify
+    behind one matcher each grew their own copy of the same two assertions.
+    Register all eight; delete one of each duplicate pair.
+
+24. **dod-2's proof points at the wrong files, and truncated success destroys the
+    cache (B36, B37, B40)** — Rank 4/3. dod-2 cites `internal/cache` +
+    `cmd/slk/customemoji_test.go`; **neither contains a cold-start test**. The
+    real proof is `customemojiseed_test.go` and
+    `customemojiseed_nonclobber_test.go` — the files added under B17/B18, i.e.
+    the criterion predates its own evidence and was never re-pointed, leaving the
+    real proof files unprotected.
+    - **B37**: the cache contract is destructive replace, and every covered
+      failure path keys on an **error**. A 200 carrying a partial page is not an
+      error and clears everything absent from it — the `:shortcode:` regression
+      dod-2 exists to prevent, worst on the largest workspaces. Whether
+      `emoji.list` as called here can return a partial success is **unverified**;
+      check that before acting.
+    - **B40**: "zero network wait" is a timing claim whose closest oracle
+      (`TestStartupEmojiOrder_SeedBeforeFetch`) pins *call ordering*. Ordering
+      permits the seed to sit behind a startup barrier. Wants a blocking
+      `fakeEmojiLister` and an assertion that a frame renders before release.
+
+25. **Two more instances of the mandated class, both outside `internal/ui` (B35,
+    B41)** — Rank 4/3. `os.Getenv("TMUX")` is read at `cmd/slk/main.go:416`,
+    `internal/ui/app.go:791` and `internal/image/kitty.go:65` — and `kitty.go`
+    bypasses **its own package's** injectable accessor (`capability.go:35`,
+    `var getenv = os.Getenv`, "overridable in tests") while `capability.go:26`
+    reads the same variable *through* it. So one variable, one package, two
+    reads, one injectable. A test faking `getenv` gets an inconsistent view
+    inside a single package. Fix is one line: `return getenv("TMUX") != ""`.
+    - **B41**: `XDG_DATA_HOME` is resolved independently at `cmd/slk/paths.go:17`
+      and `internal/export/markdown.go:71`, with independent unset-case
+      fallbacks. `internal/export` cannot import `cmd/slk`, so the shared home has
+      to be a third package. Note this is the variable slk-dev's isolation relies
+      on.
+
+26. **Lower-ranked but recorded, because two touch lines a fix must edit anyway
+    (B49–B55)** — `exitZoom` restores the messages viewport **unconditionally**
+    (`reducer_zoom.go:79`), so any autoscroll or `G` during zoom is silently
+    reverted on exit, and a thread-zoomed exit stamps a stale offset onto a pane
+    the user never touched (B49, Rank 3 — and it needs B15's pane hooks to fix
+    properly). The zoom cache bit and `invalidateZoomCaches` are two mechanisms
+    for one rule, so whichever is dead is the one fs-zoom-cache-keys' proof is
+    anchored to (B50, Rank 3 — delete one; note the screen memo has no zoom bit
+    at all and is the one thing the keys cannot express). `sixelpaint.go` has zero
+    zoom/status references, leaving fs-statusrow-math's sixel clause unsupported
+    (B51, Rank 3, mechanism unverified). Then: `enterZoom` is the only transition
+    with no guard, delegating it to a comment AGENTS.md prohibits (B52); bare
+    `1`-`9` are swallowed wholesale while `0` is not (B53); the keyless
+    `WorkspaceFinder` entry inflates the apparent suppression set (B54); and the
+    suppression comment still argues for `toastWithClear`, which lane-toast
+    deleted, directly above the `uploadToastCmd` call it now contradicts (B55).
