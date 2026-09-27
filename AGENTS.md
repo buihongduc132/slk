@@ -87,6 +87,8 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Plain-text line segmentation (grapheme-correct) | `messages.PlainLines`, `messages.DisplayWidthOfPlain`, `messages.SliceColumns` |
 | Display width of a string (emoji-aware) | `emoji.Width(s)` |
 | Case/accent-insensitive fold for matching | `text.Fold(s)` |
+| Rank a candidate name against a typed query | `fuzzy.Match(name, query)` → `(Tier, score, ok)`; folds both sides itself, so pass raw strings |
+| The individual match predicates behind it | `fuzzy.SubsequenceScore` (in-order walk + word-boundary/tightness score), `fuzzy.WordPrefix`, `fuzzy.SquashedPrefix` |
 | Slack mrkdwn → plain text | `messages.FlattenMrkdwn`, `messages.FlattenMrkdwnWithUserGroups` |
 | Search-term highlighting (ANSI/OSC-safe) | `messages.HighlightSearchTerms`, `messages.SearchHighlightSGR` |
 | Extract links from message text | `messages.ExtractLinks` |

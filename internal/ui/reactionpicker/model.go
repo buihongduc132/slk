@@ -245,46 +245,79 @@ func (m *Model) filter() {
 	q := text.Fold(m.query)
 	m.filtered = m.filtered[:0]
 
-	isFrecent := make(map[string]bool, len(m.frecent))
-	for _, f := range m.frecent {
-		isFrecent[f.Name] = true
+	// frecentRank maps a name to its position in the frecent list so the
+	// recent tier keeps the cache's frecency order instead of falling back
+	// to the alphabetical candidate order. Lookups only: the ranking path
+	// never iterates a map, which would make the sort nondeterministic.
+	frecentRank := make(map[string]int, len(m.frecent))
+	for i, f := range m.frecent {
+		if _, dup := frecentRank[f.Name]; !dup {
+			frecentRank[f.Name] = i
+		}
 	}
 
 	type match struct {
-		entry   core.EmojiEntry
-		tier    fuzzy.Tier
-		score   int
-		idx     int
-		frecent bool
+		entry core.EmojiEntry
+		tier  fuzzy.Tier
+		score int
+		idx   int // candidate-pool position; unique, so ranking is a total order
+		rank  int // position in the frecent list, or -1 when not frecent
 	}
 	var matches []match
-	for i, e := range m.allEmoji {
+	consider := func(e core.EmojiEntry, idx int) {
 		tier, score, ok := fuzzy.Match(e.Name, q)
-		if ok {
-			matches = append(matches, match{
-				entry:   e,
-				tier:    tier,
-				score:   score,
-				idx:     i,
-				frecent: isFrecent[e.Name],
-			})
+		if !ok {
+			return
 		}
+		rank := -1
+		if r, isFrecent := frecentRank[e.Name]; isFrecent {
+			rank = r
+		}
+		matches = append(matches, match{entry: e, tier: tier, score: score, idx: idx, rank: rank})
+	}
+
+	inAll := make(map[string]bool, len(m.allEmoji))
+	for i, e := range m.allEmoji {
+		inAll[e.Name] = true
+		consider(e, i)
+	}
+	// frecent_emoji is a GLOBAL cache table with no team column
+	// (internal/cache/db.go), so it can name emoji this workspace's list
+	// does not carry. Those still belong to the recent tier as long as they
+	// carry a glyph to render with; ones that exist nowhere any more are
+	// skipped rather than drawn as blank rows. Walking allEmoji alone made
+	// them unreachable no matter how they ranked.
+	for j, f := range m.frecent {
+		if inAll[f.Name] || f.Unicode == "" {
+			continue
+		}
+		consider(f, len(m.allEmoji)+j)
 	}
 
 	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].frecent != matches[j].frecent {
-			return matches[i].frecent // true comes before false
+		a, b := matches[i], matches[j]
+		// 1. Recent tier. It is frecent INTERSECT matches -- consider()
+		//    admits a candidate only when it matches the query -- and it
+		//    orders among itself by frecency.
+		if (a.rank >= 0) != (b.rank >= 0) {
+			return a.rank >= 0
 		}
-		if matches[i].tier != matches[j].tier {
-			return matches[i].tier < matches[j].tier
+		if a.rank >= 0 && a.rank != b.rank {
+			return a.rank < b.rank
 		}
-		if matches[i].tier == fuzzy.TierSubsequence && matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
+		// 2. Name tier: prefix > word > squashed > substring > subsequence.
+		if a.tier != b.tier {
+			return a.tier < b.tier
 		}
-		return matches[i].idx < matches[j].idx
+		// 3. Subsequence score; the other tiers all carry 0.
+		if a.tier == fuzzy.TierSubsequence && a.score != b.score {
+			return a.score > b.score
+		}
+		// 4. Input order, which for allEmoji is alphabetical.
+		return a.idx < b.idx
 	})
 
-	for i := 0; i < len(matches); i++ {
+	for i := range matches {
 		m.filtered = append(m.filtered, matches[i].entry)
 	}
 	m.selected = 0
