@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"golang.design/x/clipboard"
@@ -176,19 +177,48 @@ func beginEdit(a *App, panel Panel, stashed string) func(*testing.T, *App) {
 // (bubbletea/commands.go:36-46) -- even though the RUNTIME executes the
 // members concurrently, which is what the "no ordering guarantees"
 // comment on BatchMsg refers to.
+// A cmd that is NOT a batch is almost always a bare tea.Tick, whose
+// closure blocks for the tick's whole duration. Calling it on the test
+// goroutine would hang the package until the -timeout panic rather than
+// failing this one row, so the call is made off-goroutine and bounded:
+// a broken contract has to surface as a diagnosable failure here, not as
+// a 10-minute panic three packages away.
 func firstBatchCmd(t *testing.T, cmd tea.Cmd) {
 	t.Helper()
 	if cmd == nil {
 		t.Fatal("cmd = nil, want a toast batch")
 	}
-	batch, ok := cmd().(tea.BatchMsg)
+	msg, ok := cmdMsgWithin(t, cmd, time.Second)
 	if !ok {
-		t.Fatalf("cmd() = %T, want tea.BatchMsg", cmd())
+		t.Fatal("cmd() did not return within 1s: want a tea.Batch of " +
+			"(setter, tick), got a cmd that blocks -- a bare tea.Tick " +
+			"does this. uploadToastCmd must stay batched; its callers and " +
+			"this helper depend on it.")
+	}
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("cmd() = %T, want tea.BatchMsg", msg)
 	}
 	if len(batch) != 2 {
 		t.Fatalf("batch has %d cmds, want 2 (setter + tick)", len(batch))
 	}
 	batch[0]()
+}
+
+// cmdMsgWithin runs cmd on its own goroutine and returns its msg, or
+// ok=false if it has not returned within d. The goroutine is abandoned
+// rather than killed (Go cannot cancel a blocked tea.Tick), which is
+// safe: it writes only to its own buffered channel.
+func cmdMsgWithin(t *testing.T, cmd tea.Cmd, d time.Duration) (tea.Msg, bool) {
+	t.Helper()
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	select {
+	case msg := <-ch:
+		return msg, true
+	case <-time.After(d):
+		return nil, false
+	}
 }
 
 // afterKeyValue feeds one more printable key straight into a compose and

@@ -4129,10 +4129,15 @@ func resolveFilePath(text string) (string, bool) {
 // uploadToastCmd builds a tea.Cmd that sets the status bar to the
 // given message and schedules a CopiedClearMsg after dur.
 func (a *App) uploadToastCmd(text string, dur time.Duration) tea.Cmd {
-	a.statusbar.SetToast(text)
-	return tea.Tick(dur, func(time.Time) tea.Msg {
-		return statusbar.CopiedClearMsg{}
-	})
+	return tea.Batch(
+		func() tea.Msg {
+			a.statusbar.SetToast(text)
+			return nil
+		},
+		tea.Tick(dur, func(time.Time) tea.Msg {
+			return statusbar.CopiedClearMsg{}
+		}),
+	)
 }
 
 // scheduleChannelSearch defers a channels/search for the finder's
