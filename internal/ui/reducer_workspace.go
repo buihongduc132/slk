@@ -297,7 +297,7 @@ func reduceWorkspaceReady(a *App, m WorkspaceReadyMsg) tea.Cmd {
 // data, restores last-viewed channel).
 func reduceWorkspaceSwitched(a *App, m WorkspaceSwitchedMsg) tea.Cmd {
 	if a.compose.Uploading() || a.threadCompose.Uploading() {
-		return a.uploadToastCmd("Upload in progress", 2*time.Second)
+		return a.uploadToastCmd("Upload in progress", 2*time.Second, toastDeferred)
 	}
 	// fs-zoom-invariant: this arm resets stackFront and lands in
 	// ViewChannels, so a surviving zoom would strand the user fullscreen on

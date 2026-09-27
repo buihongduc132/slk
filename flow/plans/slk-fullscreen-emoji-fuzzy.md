@@ -97,13 +97,26 @@ _(populated by gotcha-coverage + re-runs)_
 3. **Plan home seam** — plan lives in `flow/plans/` (cmd convention); slk repo's own workflow is `docs/superpowers/specs + plans`, tests-first (README). Implementation lanes should follow the repo convention; carry this plan as the requirement source.
 4. **`Z` binding** — bind `Z` as alias or drop from evidence (rank 2, decided: alias bind, cheap).
 
-5. **Two toast helpers, one contract (B2)** — `toastWithClear` (eager) and
-   `App.uploadToastCmd` (batched) are the same idea under two spellings; picking
-   the wrong one caused 6 of the 8 fullscreen failures, and "fixing" it by
-   making the batched one eager broke 14 call sites and hung `internal/ui` for
-   10 minutes. Per `AGENTS.md` the resolution is DELETE one, never alias — one
-   helper with an explicit eager/deferred parameter. NOT done (outside both lane
-   scopes); needs its own commit.
+5. ~~**Two toast helpers, one contract (B2)**~~ — **RESOLVED** on
+   `slkfz/lane-toast` @ `63ced86`, awaiting merge sign-off. `toastWithClear`
+   (eager) and `App.uploadToastCmd` (batched) were the same idea under two
+   spellings; picking the wrong one caused 6 of the 8 fullscreen failures, and
+   "fixing" it by making the batched one eager broke 14 call sites and hung
+   `internal/ui` for 10 minutes. Per `AGENTS.md` the resolution is DELETE one,
+   never alias — now one helper, `uploadToastCmd(text, dur, mode)`, with the two
+   former bodies preserved verbatim under `toastEager` / `toastDeferred`.
+   - Pinned by `internal/ui/toast_consolidation_test.go` (hash `59f229d7`): an
+     AST walk asserting exactly one helper implementation survives (F2P, RED at
+     base), plus both semantics as P2P. The two lines that must legitimately
+     change during the refactor live in an unpinned seam,
+     `internal/ui/toast_shims_test.go` — pinning them would have blocked the fix
+     while not pinning the assertions would have let them be weakened.
+   - Gate re-run independently (gated-dev step 9), exit 0: 1 F2P green, P2P
+     across 9 packages including the fullscreen suite, gofmt clean, vet clean,
+     `go.mod` frozen.
+   - Still open, cosmetic: the surviving name `uploadToastCmd` is now a
+     misnomer — it is no longer upload-specific. Renaming it touches the pinned
+     oracle, so it wants its own commit and a re-pin.
 6. **`fuzzy-rkt-verified` is only partially satisfiable (B4)** — the ranking
    rule, the score-aware subsequence tier and the "recent = matching ∩ frecent"
    clause are all implemented and green. But the DOD's own `rkt→rocket` example

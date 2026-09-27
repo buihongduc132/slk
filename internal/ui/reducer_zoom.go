@@ -164,7 +164,7 @@ var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 	// setter inside a tea.Batch and 14 production call sites depend on
 	// that shape, so it must not be made eager.
 	if a.zoomSuppresses(km) {
-		return toastWithClear(a, zoomSuppressedToast, zoomToastDuration), true
+		return a.uploadToastCmd(zoomSuppressedToast, zoomToastDuration, toastEager), true
 	}
 
 	// Zoom-exit. See the ESC PEEL ORDER note above for why this is

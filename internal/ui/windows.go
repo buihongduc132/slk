@@ -65,7 +65,7 @@ func (a *App) splitWindow(dir wintree.Dir) tea.Cmd {
 	srcCh, _ := a.wins.Channel(a.focusedWin)
 	id, err := a.wins.Split(a.focusedWin, dir, a.windowBounds())
 	if err != nil {
-		return toastWithClear(a, "Not enough room", 2*time.Second)
+		return a.uploadToastCmd("Not enough room", 2*time.Second, toastEager)
 	}
 	m := a.newWindowModel(srcCh.Name)
 	m.SetChannel(srcCh.Name, a.presence.dmTopicFor(a, srcCh.ID))
@@ -90,7 +90,7 @@ func (a *App) splitWindow(dir wintree.Dir) tea.Cmd {
 func (a *App) closeWindow() tea.Cmd {
 	next, err := a.wins.Close(a.focusedWin)
 	if err != nil {
-		return toastWithClear(a, "Cannot close last window", 2*time.Second)
+		return a.uploadToastCmd("Cannot close last window", 2*time.Second, toastEager)
 	}
 	a.syncWinModels()
 	return a.focusWindow(next)

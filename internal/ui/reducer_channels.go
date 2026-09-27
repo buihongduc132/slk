@@ -321,7 +321,7 @@ func (a *App) retargetActiveChannel(id, name, chType string) {
 // flag.
 func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 	if a.compose.Uploading() || a.threadCompose.Uploading() {
-		return a.uploadToastCmd("Upload in progress", 2*time.Second), false
+		return a.uploadToastCmd("Upload in progress", 2*time.Second, toastDeferred), false
 	}
 	// fs-zoom-invariant: the messages pane is about to be repointed at a
 	// different channel. clearZoom, not exitZoom -- exitZoom would stamp the
