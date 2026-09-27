@@ -79,8 +79,14 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if key.Matches(msg, a.keys.Escape) {
+		// Zoom-exit outranks picker-close and insert-exit
+		// (fs-esc-pecking-order): one esc leaves zoom and nothing else,
+		// so insert mode and any open compose picker survive it. The
+		// protective arms above (upload, edit-cancel) already claimed
+		// their esc, so they outrank zoom-exit as the peel order
+		// requires.
 		if a.zoomed {
-			a.zoomed = false
+			a.exitZoom()
 			return nil
 		}
 		// If a picker is active, close it instead of exiting insert mode.
