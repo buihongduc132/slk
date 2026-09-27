@@ -53,6 +53,10 @@ func (a *App) enterZoom() {
 	a.zoomSavedYOffset = a.messagepane.YOffset()
 	a.zoomSavedSelectedIndex = a.messagepane.SelectedIndex()
 	a.zoomed = true
+	// Zoom hides the status row, which is where the "ctrl+w …" / "g …"
+	// hints live. Leaving a chord armed behind a hidden hint means the
+	// user's next keystroke is silently eaten as a window command.
+	a.disarmPendingChords()
 	a.invalidateZoomCaches()
 }
 
@@ -70,6 +74,7 @@ func (a *App) exitZoom() {
 		return
 	}
 	a.zoomed = false
+	a.disarmPendingChords()
 	a.invalidateZoomCaches()
 	a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
 }
@@ -91,6 +96,7 @@ func (a *App) clearZoom() {
 		return
 	}
 	a.zoomed = false
+	a.disarmPendingChords()
 	a.invalidateZoomCaches()
 }
 
