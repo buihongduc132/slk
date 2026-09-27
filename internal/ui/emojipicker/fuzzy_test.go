@@ -100,8 +100,18 @@ func TestFuzzy_RocketReachableBySubsequence(t *testing.T) {
 
 // "krt" must NOT match rocket (in-order semantics, G10) — with an
 // otherwise-matchable entry set the negative query yields nothing.
+//
+// FIXTURE CONSTRAINT: every entry here must match "rkt" (so the set is
+// genuinely matchable and the negative result is meaningful) while NO
+// entry may contain k…r…t in that order. That second half is easy to get
+// wrong. "bookmark_tabs" was the original third entry and is a REAL
+// in-order match for "krt" — b-o-o-[k]-m-a-[r]-k-_-[t]-a-b-s, k@3 r@6
+// t@9 — so the row demanded that correct in-order matching return
+// nothing, which no correct implementation can do. Verified the
+// replacements: rocket, cricket and roller_skate all match "rkt" and
+// none match "krt".
 func TestFuzzy_OutOfOrderQueryMatchesNothing(t *testing.T) {
-	entries := entriesFor(t, "rocket", "bookmark_tabs", "cricket")
+	entries := entriesFor(t, "rocket", "cricket", "roller_skate")
 	m := New()
 	m.SetEntries(entries)
 	m.SetQuery("krt")
