@@ -128,6 +128,16 @@ _(populated by gotcha-coverage + re-runs)_
    penalty so a short near-exact name outranks a long incidental substring —
    the latter is a ranking-semantics change the current tests pin, so it is not
    a silent fix.
+   - **Now confirmed against the live workspace**, not just reasoned about. The
+     capability suite drove the real binary in tmux against `dy-swarm`: `:rkt`
+     opened the picker with 5 candidate rows, every row a genuine in-order match
+     (no bag-of-chars leakage), and `rocket` was **not** among them. The
+     evicting rows are the `cmd-pallet-*worktree*` custom emoji, because `rkt`
+     is contiguous inside `w-o-`**`rkt`**`-r-e-e`. So the matcher is obeying the
+     plan's own mandated order — tier 4 beats tier 5 — and the DOD example is
+     what is wrong. This closes the "is it reachable in practice" half of the
+     question; the DECISION above (drop the example, or add a length/density
+     penalty) is still open and still not a silent fix.
 7. **`messages.ClickAt` spacer-row fix has repo-wide reach (B5)** — the
    pre-existing off-by-one it corrected affects EVERY click in the messages
    pane, not just the zoom fixture. Worth calling out in review; `thread.Model`
@@ -318,3 +328,22 @@ _(populated by gotcha-coverage + re-runs)_
       (22 F2P / 8 P2P), fuzzy GREEN (76 F2P across 3 pkgs / 7 P2P), toast GREEN
       (1 F2P / 9 P2P incl. the fullscreen suite), all three at
       `head=17d8594, dirty=0`.
+
+19. **The live capability suite's "restored frame differs" line is NOT
+    `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
+    `capability-test.sh` drives the real binary against a real workspace, so
+    between the pre-zoom capture and the post-exit capture the workspace itself
+    can change. On the latest run the only two diff hunks were a peer's presence
+    glyph flipping (`○ Jane` → `⊘ Jane`, i.e. a `peerstatus` DND change arriving
+    over the WebSocket) and the status row echoing it. Neither is a zoom
+    artifact, and the suite already says so in its own output.
+    - The byte-equal guarantee `fs-restore-eq` actually claims is pinned
+      deterministically by the golden tests, where the clock, theme and emoji
+      mode are all fixed (`newGoldenApp`) and no live data exists. A live TUI
+      against a live workspace is the wrong instrument for a byte-equality
+      claim, and the suite is right to report the diff as informational rather
+      than as a failure.
+    - Standing caveat that follows from this: any future live-frame comparison
+      in that suite must either mask volatile regions (presence glyphs, clock,
+      unread badges) or stay informational. Do not "fix" it by re-blessing a
+      live capture.
