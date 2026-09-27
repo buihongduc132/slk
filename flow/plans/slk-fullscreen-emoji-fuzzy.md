@@ -38,6 +38,18 @@ Plan done when ALL below true:
 - [x] fs-esc-pecking-order: esc peel order while zoomed is explicit and test-pinned: modal modes own esc (zoom persists; help/finder/confirm rows included) > insert protective arms (upload-toast, edit-cancel) > zoom-exit > picker-close/insert-exit/chord-cancel/reaction-nav/thread-close; ctrl+w-chord esc-cancel (`windows_chord_test.go`) and reaction-nav esc behavior unchanged when NOT zoomed. [gotcha G1, G15]
 - [x] fs-statusrow-math: zoomed pane spans the FULL terminal height — statusHeight threading or height-override reaches `panelLayout.Compute` AND `PanelAt` AND every parallel mouse router (wheel/click End-accessor chains) AND sixel/kitty placement bounds; golden shows content on the last row. [gotcha G2, G17]
 - [x] fs-zoom-invariant: fullscreen auto-clears when the zoomed pane closes or the view switches (q-close, ThreadClosedMsg, workspace switch app.go:2194, channel jump, ctrl+a); Enter/click thread-open while zoomed flips zoom to the thread (never opens invisibly); under zoom threadFront derives from stackFront only (Tab/click does not flip the zoomed pane; matches `threadInFront()` :898). [gotcha G5, G15]
+  - **Was marked `[x]` with no implementation** (B13). The auto-clear did not
+    exist: `exitZoom` had three call sites, none of them a clearing event, and
+    `TestFullscreen_ZoomAutoClears` could not fail because it recaptures its
+    baseline frame *after* the event. Implemented in `d071d7f` via `clearZoom`
+    (which deliberately does NOT restore the saved viewport — see B13), pinned
+    by `TestFullscreen_ZoomAutoClearsStateNotFrame` asserting `a.zoomed`.
+  - Tab/click not flipping the zoomed pane was already correct, but only
+    provable after its oracle was replaced — the old one asserted a token that
+    renders in both layouts at 200 cols.
+  - Still open: the save/restore round trip is vacuous when the THREAD is the
+    zoomed pane (B15). `thread.Model` exposes no viewport accessor, so the
+    symmetric restore is not expressible without Phase 3's pane hooks.
 - [x] fs-toast-zoomed: toasts and chord hints remain visible while zoomed (transient overlay strip or temporarily un-hidden status row); suppression toast is asserted visible in a zoomed frame. [gotcha G6]
 - [x] fs-insert-z-types: `z` in insert mode types 'z' into compose (zoomed and unzoomed) — binding lives in the normal-mode map only. [gotcha G8]
 - [x] fs-esc-test-layering: esc/precedence/toast proofs ride the REAL reducer chain — esc rows via `updateAndRender`/`a.Update` (never `runKeyCases`, which bypasses the chain per its own doc); toast rows execute the returned `tea.Cmd` (snooze-test pattern); `z` toggle rows may use `runKeyCases`. Comment in the table points at the bypass caveat. [gotcha G3]

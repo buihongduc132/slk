@@ -110,6 +110,53 @@
     alias — the two helpers should be one with an explicit eager/deferred
     parameter. NOT done here (out of lane scope); recorded as Open Thread 5.
 
+- **B13 `fs-zoom-invariant` was marked `[x]` with NO implementation, and the
+  test that should have caught it cannot fail.** Zoom survived the
+  disappearance of the pane it was zooming: `exitZoom` had exactly three call
+  sites (the `z` toggle, esc, insert-mode's esc arm), `a.zoomed` was assigned
+  only in `enterZoom`/`exitZoom`, and neither `reducer_channels.go` nor
+  `reducer_workspace.go` mentioned zoom at all — so a thread close, channel
+  jump or workspace switch stranded the user fullscreen on a closed or
+  replaced pane with no nav affordances (G5, exactly as predicted).
+  - `TestFullscreen_ZoomAutoClears` intends to pin this and structurally
+    cannot. It captures `frameIdle` **before** zoom, **reassigns** it after the
+    clearing event, then asserts a `z` press yields a different frame. Cleared
+    → `frameIdle` unzoomed, `z` enters, differs, pass. Leaked → `frameIdle`
+    zoomed, `z` exits, differs, **also pass**. Only an inert `z` fails it. Its
+    own error string names the leak branch as something it detects.
+  - Proven on one tree, one run, at `6b4f672`: the new state-based test FAILED
+    all three rows while the frame-delta test reported `ok`.
+  - Fixed by adding `clearZoom` beside `exitZoom` rather than reusing it.
+    `exitZoom` restores the viewport captured by `enterZoom`, which is right
+    for a user-initiated exit and **wrong** for auto-clear: on a channel jump
+    it stamps the old channel's offset and selected index onto the new
+    channel's pane, and a shorter new channel puts that index out of range.
+  - Generalizable, and the counterpart to B1: **a frame-delta oracle cannot
+    pin a rule whose two outcomes both change the frame.** Assert the state
+    that discriminates. This one hid behind a green suite, a green gate, and a
+    21/21 live capability run — none of which covered it, because none of them
+    asserted `a.zoomed` after a clearing event.
+
+- **B14 Zoom transitions stranded both pending chords armed, behind a hidden
+  hint.** `reduceZoom` is in the reducer chain (`app.go:998`) while
+  `pendingWinCmd` and `pendingTop` are consumed in `handleNormalMode`
+  (`mode_normal.go:42`, `:51`), which runs **after** the chain — and every arm
+  of `reduceZoom` returns `true`, so it starved both. `SetMode` disarms them
+  ("a global intercept must not strand it armed") but a zoom transition is not
+  a mode change: `z` and esc-exit both stay in `ModeNormal`, so that guard
+  never fired.
+  - Worse than a stranded flag: the `ctrl+w …` / `g …` hints render in the
+    status row, which zoom **hides**. The chord stayed armed with no
+    affordance and the next keystroke was silently eaten as a window command.
+  - Five rows RED at base, including `g` armed *while* zoomed — `g` is not in
+    `zoomSuppresses`, unlike `ctrl+w`, so both orders are reachable. Fixed by
+    extracting `SetMode`'s block as `App.disarmPendingChords` and calling it
+    from `enterZoom`/`exitZoom`/`clearZoom` (extracted, not copied, per
+    `AGENTS.md`).
+  - Generalizable: **a reducer that claims a key starves every post-chain
+    consumer.** Any state change that makes a chord's hint unreachable has to
+    disarm the chord.
+
 ## B-Rank 4 — significant
 
 - **B3 A shared test helper could hang its whole package instead of failing.**
@@ -152,6 +199,31 @@
   wrong-but-stable is invisible: it passes forever and pins the wrong
   behaviour. Re-blessed in `2dbb038` with the reason stated; the other two
   goldens were untouched.
+
+- **B15 The zoom save/restore round trip is vacuous whenever the THREAD is the
+  zoomed pane.** `enterZoom` snapshots `a.messagepane.YOffset()` /
+  `SelectedIndex()` and `exitZoom` restores onto `a.messagepane` — always,
+  unconditionally. But `TestFullscreen_ZoomZoomsTheFrontPane` and the
+  `fullscreen_thread_zoomed` golden both establish the thread as a legitimate
+  zoom target. So when the thread is in front, the snapshot captures a pane the
+  user is not zooming and cannot change while it is hidden, and the thread's own
+  scroll position is never saved or restored at all.
+  - `thread.Model` has 69 exported methods and **none** of `YOffset`,
+    `SelectedIndex`, `SetViewport` or `SetSize`. It owns an internal viewport
+    (`m.vp`, driven by `ScrollUp`/`ScrollDown`/`GoToTop`/`GoToBottom`) that
+    `App` has no accessor to reach, so the symmetric restore is not merely
+    missing — it is not expressible.
+  - `fs-restore-eq` is therefore pinned for exactly the one pane where the code
+    happens to be right: every restore assertion is on `a.messagepane`, via a
+    fixture that never opens a thread.
+  - NOT fixed here. It needs `YOffset`/`SetViewport` equivalents on
+    `thread.Model`, which per `AGENTS.md` means changing both models in lockstep
+    — Phase 3's pane-hooks territory, not a bug-fix branch. Raised separately
+    rather than folded in.
+  - Note the divergence is *asymmetric duplication*: the two models share 45
+    identically-named methods, and this is one of the places they do not. The
+    lockstep test cannot catch it, because it compares render output in one
+    static non-scrolling state.
 
 ## B-Rank 3 — moderate
 
@@ -207,3 +279,28 @@
 - The compose emoji trigger requires `:` at column 0 or directly after
   whitespace (`compose/model.go:1140-1148`). A stale compose buffer therefore
   reads as "picker broken". Worth a line in the feature docs.
+- `TestFullscreen_TabWhileZoomedDoesNotFlipTheZoomedPane` asserts only
+  `strings.Contains(plain, "wrapping behaviour")`. At 200 cols both panes render
+  side-by-side unzoomed — the sibling golden subtest says so explicitly as its
+  reason for choosing that width — so the token is present whether Tab left the
+  zoom alone, flipped it, or dropped it. Its own comment concedes it "passes
+  today (`z` is a no-op…)": written as a base-passing guard, never given a
+  zoom-specific observable, unlike every other row in the file. Replaced with a
+  row that also asserts `a.zoomed` and the status row's absence. **Tab's
+  behaviour was already correct** — the replacement passes at base, so it is
+  P2P strengthening, not an F2P fix. Recorded so the next reader does not read
+  it as a bug that was fixed.
+- **Delegate findings need the same verification as delegate code.** Of six
+  findings returned by the delegated gotcha-coverage pass on the zoom feature,
+  four survived independent checking (B13, B14, B15, the Tab row above), one was
+  **refuted**, and one was accurate but already annotated in place. The refuted
+  one claimed two of `assertZoomedFrame`'s five sidebar tokens were vacuous
+  because `● bob` / `○ carol` "do not appear in the rendered frame" — they
+  appear at lines 11 and 12 of `fullscreen_zoom_exit_restored.ansi`, so
+  asserting their absence from a zoomed frame is a real check. The delegate's
+  own quoted evidence contradicted its conclusion. Its `file:line` references
+  were otherwise accurate, including two I initially mis-refuted with a bad
+  grep (`reduceChannelSelected`/`reduceWorkspaceSwitched` are package-level
+  functions taking `a *App`, not methods, so a `^func (a \*App)` pattern misses
+  them). **Verify both directions**: a delegate's finding can be wrong, and so
+  can the check that dismisses it.
