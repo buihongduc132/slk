@@ -133,7 +133,54 @@ _(populated by gotcha-coverage + re-runs)_
    pane, not just the zoom fixture. Worth calling out in review; `thread.Model`
    shares 377 lines with `messages.Model` and should be checked for the same
    miscount.
-8. **agyralph is unusable on this host (B7, B8)** — truncated conversation-DB
-   harvest (14 iterations, zero artifacts) plus a circuit breaker that disarms a
-   correctly-failing gate. Both lanes ran on `ralph --agent claude-code`
-   instead. The gated-dev bridge doc should exempt gate checks from the breaker.
+8. ~~**agyralph is unusable on this host (B7, B8)**~~ — **root-caused and fixed**
+   in a scratch copy at `~/.local/state/slkfz/agyralph-patched/` (5-hunk patch +
+   README; the user's `open-ralph-wiggum` repo is deliberately untouched, so
+   applying it is their call). Two independent bugs, not one:
+   - **B8** the harvest returned tool-call ids because `step_type=15` carries
+     both prose and tool calls and a turn usually *ends* on a tool call, so
+     `rows[-1]` read the wrong row. Fixed: scan backward for the newest row with
+     prose, longest-printable-run extraction, junk filter. Measured 11 chars →
+     645 and 338 chars on two dead runs.
+   - **B11** (the worse one) `wait_turn` tested for `STATUS_IN_PROGRESS = 8`,
+     which this agy build never writes — the executing step is status **2**. So
+     every turn was declared finished ~9s after being sent, on top of an agent
+     still working. Fixed by enumerating the TERMINAL set and requiring
+     `MAX(idx)` stable. Proven end to end on a task whose tool call sleeps 25s:
+     before, turn "finished" in ~9s and the run died
+     `failed/max_iterations_reached`; after, `turn finished in 1m00s`,
+     `quiesced: idx steady for 4 reads`, gate exit 0, **`done/complete` at
+     iteration 1**.
+   - It then did real work: the toast consolidation now merged at `59cb245`.
+   - Still open: **B12/B7**, the circuit breaker disarming a correct gate. It
+     should trip on gate-invalid (exit 2/125), not on red (exit 1) — consecutive
+     failures are the expected shape of a red gate mid-refactor. Unfixed; it is a
+     design call on the user's tool.
+
+9. **The emoji seed clobbers the bootstrap subset (B17), and a value race hides
+   it (B18)** — both Rank 4, both in merged and deployed code, both from batch 1
+   of the delegated gotcha-coverage pass. `cache.CustomEmoji` returns an empty
+   map with a **nil** error on a miss, so the seed's `err == nil && set != nil`
+   branch publishes empty over the `conversations.view` subset; a failed
+   `emoji.list` then leaves every custom emoji rendering as literal `:name:`.
+   And `main.go:1565` launches the seed with `go` one statement before line 1579
+   reads the same field to build `WorkspaceReadyMsg` — an `atomic.Pointer` value
+   race, so `-race` stays green permanently and first paint is nondeterministic.
+   The single fix for both: seed **synchronously** before the message, background
+   only the fetch, and make the seed non-destructive. See
+   `slk-fullscreen-emoji-fuzzy-gotcha-batch1.md`.
+
+10. **`fetchWorkspaceEmoji` is dead code with four tests guarding it (B19)** —
+    Rank 4. The live path is `fetchWorkspaceEmojiIntoCache`; the original has
+    zero non-test callers but carries the only written record of why the fetch
+    must run unconditionally, and four `TestFetchWorkspaceEmoji_*` tests pin the
+    dead copy. The plan's "assertions keep passing" was true and meaningless.
+    Same class as B2 and the same resolution rule: delete one, never alias.
+
+11. **`updated_at` is never written (B21) and the upsert error is discarded
+    (B22)** — both Rank 3. Every `custom_emoji` row is `updated_at = 0` forever
+    while every other table in the schema writes it, and the existing test
+    asserts only that the column *exists* (`PRAGMA table_info`) — a schema
+    assertion is not a write assertion. Separately, `_ = db.UpsertCustomEmoji(...)`
+    means a full disk or lock timeout silently leaves the cache permanently
+    stale, with no log line, unlike every comparable best-effort path here.
