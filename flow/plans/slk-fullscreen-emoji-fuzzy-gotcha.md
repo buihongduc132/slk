@@ -136,6 +136,13 @@
     that discriminates. This one hid behind a green suite, a green gate, and a
     21/21 live capability run — none of which covered it, because none of them
     asserted `a.zoomed` after a clearing event.
+  - **Confirmed user-visible**, not just a test gap. A live tmux probe against
+    the real workspace (open thread → `z` → `q`) exits **1 on the pre-fix
+    binary** (`6b4f672`) and **0 on the fixed one** (`7453f44`): same creds,
+    same keystrokes, sidebar absent in the leaked frame. Kept as
+    `~/.local/state/slkfz/probe-zoom-autoclear.sh` and folded into
+    `capability-test.sh` step 4b-ii, which now asserts its own preconditions
+    and reports SKIP rather than a pass when they fail.
 
 - **B14 Zoom transitions stranded both pending chords armed, behind a hidden
   hint.** `reduceZoom` is in the reducer chain (`app.go:998`) while
@@ -264,6 +271,26 @@
   `scratch|patch_|fix_|.orig|.rej` but not `.ralph/` — a denylist only catches
   what it already knows.
 
+- **B16 A gate hardcoded to one worktree cannot verify a merge, and prints
+  `exit 0` while proving nothing about it.** Both lane gates pin
+  `WT="/home/bhd/.worktrees/slkfz-lane-<lane>"` at line 16. Run bare after a
+  merge into `slkfz-int`, they `cd` into their own lane worktrees — still at
+  `5cb4bfa` — and both reported `GATE 0: GREEN` for a tree three commits stale.
+  The only thing that caught it was the `head=` cross-check B9 added: the gates
+  printed `head=5cb4bfa` against a merge at `7453f44`, so the verdict was void.
+  `merge-and-verify.sh` works only because it first runs `git checkout -B
+  slkfz/verify-$lane $merged` inside each lane worktree — which is why
+  `git worktree list` shows them on `slkfz/verify-*`. Invoking a gate directly
+  skips that step and silently measures the wrong tree.
+  - This is **B9's root cause**, not another instance of its symptom: B9 fixed
+    the script that repoints the worktree, leaving the gate itself still
+    self-bound. Generalizable: **a gate that names its own working tree can only
+    ever verify that tree.** Either the worktree is a parameter, or every caller
+    repoints it and then proves it did.
+  - The `head=` line is what made this detectable at all. A gate that did not
+    print the commit it measured would have produced an undetectable false
+    green — which is the argument for that line being mandatory, not decorative.
+
 ## B-Rank ≤2 — doc-only
 
 - The live capability test needed three fixes of its own before it measured
@@ -304,3 +331,18 @@
   functions taking `a *App`, not methods, so a `^func (a \*App)` pattern misses
   them). **Verify both directions**: a delegate's finding can be wrong, and so
   can the check that dismisses it.
+- **The capability suite's pass COUNT is not comparable between runs.** It moved
+  21 → 25 across two runs of nearly the same code: **+4** because step 3's
+  `custom_emoji` branch flipped (run #1 saw the table absent in a freshly-copied
+  cache and printed an info line; run #2 read the table that run #1's own TUI
+  session had created in the DEV cache), **+1** for the new zoom auto-clear row,
+  **−1** because `restored frame is byte-identical` fell to its info branch when
+  live workspace data moved mid-test. Two rows are conditional on cache state
+  and workspace quiescence. **Quote which rows passed, never the total** —
+  "21/21" was cited earlier as evidence of coverage when it was partly an
+  artifact of which branches happened to fire, and it was identical either side
+  of B13, a defect it did not cover.
+- The deploy script's WAL handling is correct: it `rm -f`s the `-wal`/`-shm`
+  sidecars after `.backup` (line 70), so a stale sidecar cannot shadow a fresh
+  copy. Checked because the dev cache's mtime looked like the deploy had left
+  residue; the `03:39` timestamp is the capability run, not the `03:34` deploy.
