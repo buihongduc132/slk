@@ -2219,6 +2219,11 @@ func (a *App) ToggleThread() {
 
 func (a *App) CloseThread() {
 	a.clearSelections()
+	// fs-zoom-invariant: the zoomed pane may be the thread we are about to
+	// tear down. Dropping zoom here rather than in each caller covers `q`,
+	// ctrl+] and every programmatic close. clearZoom, not exitZoom -- the
+	// pane's content is going away, so the saved viewport is meaningless.
+	a.clearZoom()
 	a.threadVisible = false
 	a.statusbar.SetInThread(false)
 	a.threadPanel.Clear()

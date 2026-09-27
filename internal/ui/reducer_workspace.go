@@ -299,6 +299,12 @@ func reduceWorkspaceSwitched(a *App, m WorkspaceSwitchedMsg) tea.Cmd {
 	if a.compose.Uploading() || a.threadCompose.Uploading() {
 		return a.uploadToastCmd("Upload in progress", 2*time.Second)
 	}
+	// fs-zoom-invariant: this arm resets stackFront and lands in
+	// ViewChannels, so a surviving zoom would strand the user fullscreen on
+	// a pane belonging to the workspace they just left. Placed after the
+	// upload guard: that early return leaves the switch un-applied, so zoom
+	// must survive it too.
+	a.clearZoom()
 	if m.Domain != "" {
 		a.workspaceDomains[m.TeamID] = m.Domain
 	}

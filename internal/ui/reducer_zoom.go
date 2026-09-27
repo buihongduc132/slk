@@ -57,10 +57,14 @@ func (a *App) enterZoom() {
 }
 
 // exitZoom leaves zoom and restores the pane state captured by
-// enterZoom. The single exit path: every place that drops zoom (the `z`
-// toggle, esc here, insert mode's esc arm, and the auto-clear events)
-// goes through it, so none of them can forget the cache invalidation or
-// the viewport restore.
+// enterZoom. This is the USER-INITIATED exit path -- the `z` toggle, esc
+// here, and insert mode's esc arm -- where the pane still holds the same
+// content it held at enterZoom, so putting the viewport back is what the
+// user expects.
+//
+// The auto-clear events do NOT come through here; they use clearZoom.
+// Restoring a saved offset onto a pane whose content has been replaced is
+// a bug, not a courtesy.
 func (a *App) exitZoom() {
 	if !a.zoomed {
 		return
@@ -68,6 +72,26 @@ func (a *App) exitZoom() {
 	a.zoomed = false
 	a.invalidateZoomCaches()
 	a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
+}
+
+// clearZoom drops zoom WITHOUT restoring the saved viewport, for the
+// auto-clear events: the zoomed pane's content is gone or replaced
+// (thread closed, channel jumped, workspace switched), so the offset and
+// selected index captured by enterZoom no longer refer to anything. On a
+// channel jump the old channel's offset would be stamped onto the new
+// channel's pane, and a shorter new channel makes the saved selected
+// index out of range.
+//
+// fs-zoom-invariant is pinned by TestFullscreen_ZoomAutoClearsStateNotFrame,
+// which asserts a.zoomed directly. Do not "simplify" these two into one
+// call: the difference is the whole point, and the older frame-delta test
+// in fullscreen_red_test.go passes either way.
+func (a *App) clearZoom() {
+	if !a.zoomed {
+		return
+	}
+	a.zoomed = false
+	a.invalidateZoomCaches()
 }
 
 // invalidateZoomCaches drops the render caches that are keyed on the
