@@ -114,6 +114,8 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Window tree geometry | `ui/wintree` |
 | Modal geometry / row hit-testing | `boxedOverlay`, `clickableOverlay` in `internal/ui/reducer_modal_click.go` |
 | Channel/DM destination picker for forwarding | `channelfinder.Model.OpenForForwarding()` (joined conversations only); `Open()` restores the normal switcher |
+| Enter / leave fullscreen pane zoom | `App.enterZoom`, `App.exitZoom` (`internal/ui/reducer_zoom.go`). **Never assign `a.zoomed` directly** — `exitZoom` also invalidates the zoom-keyed caches and restores the saved viewport, and a second hand-rolled exit in `mode_insert.go` was doing neither |
+| Which pane a Compute call should treat as in front | `App.layoutThreadFront()` (`internal/ui/app.go`) — resolves through `zoomFrontIsThread` while zoomed, `threadInFront` otherwise. `windowBounds` is the one deliberate exception (hardcodes `false`) |
 
 ### Test helpers
 
