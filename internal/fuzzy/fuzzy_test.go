@@ -16,10 +16,59 @@ import (
 // better than subsequence. Consumers (channelfinder.filter, the
 // emoji/reaction pickers) sort by tier ascending; a reorder here
 // reorders every picker at once.
-func TestTierConstants_OrderPrefixBeatsSubstringBeatsSubsequence(t *testing.T) {
-	if !(TierNone < TierPrefix && TierPrefix < TierSubstring && TierSubstring < TierSubsequence) {
-		t.Fatalf("tier ordering broken: none=%d prefix=%d substring=%d subsequence=%d",
-			TierNone, TierPrefix, TierSubstring, TierSubsequence)
+// B30: this used to assert only
+//
+//	TierNone < TierPrefix && TierPrefix < TierSubstring && TierSubstring < TierSubsequence
+//
+// which names 4 of the 6 constants. TierWordPrefix and TierSquashedPrefix were
+// absent, so swapping them — or moving either across TierSubstring — kept this
+// test and every consumer test green while silently reranking channelfinder and
+// both emoji pickers. The two unpinned constants were the two the plan did not
+// know existed: it describes the merged set as "4 tiers" where there are five
+// plus TierNone.
+//
+// Compounded by B25: channelfinder stores int(tier) - 1 against the old 3-tier
+// numbering, so a reorder here also corrupts its local scheme with nothing
+// failing.
+//
+// Pinned by VALUE, not just by relative order. Values are the contract: a
+// consumer that does arithmetic on them (as channelfinder does) breaks on a
+// renumber even when the relative order survives.
+func TestTierConstants_ExactValuesAndFullOrder(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		got  Tier
+		want Tier
+	}{
+		{"TierNone", TierNone, 0},
+		{"TierPrefix", TierPrefix, 1},
+		{"TierWordPrefix", TierWordPrefix, 2},
+		{"TierSquashedPrefix", TierSquashedPrefix, 3},
+		{"TierSubstring", TierSubstring, 4},
+		{"TierSubsequence", TierSubsequence, 5},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d. Renumbering a tier reranks every picker at once, and channelfinder does arithmetic on these values (int(tier)-1), so a renumber corrupts its local scheme silently.", c.name, c.got, c.want)
+		}
+	}
+
+	// The full chain, every adjacent pair, so no constant can cross another.
+	chain := []struct {
+		name string
+		tier Tier
+	}{
+		{"TierNone", TierNone},
+		{"TierPrefix", TierPrefix},
+		{"TierWordPrefix", TierWordPrefix},
+		{"TierSquashedPrefix", TierSquashedPrefix},
+		{"TierSubstring", TierSubstring},
+		{"TierSubsequence", TierSubsequence},
+	}
+	for i := 1; i < len(chain); i++ {
+		if !(chain[i-1].tier < chain[i].tier) {
+			t.Errorf("%s (%d) must rank better than %s (%d); lower is better and consumers sort ascending",
+				chain[i-1].name, chain[i-1].tier, chain[i].name, chain[i].tier)
+		}
 	}
 }
 

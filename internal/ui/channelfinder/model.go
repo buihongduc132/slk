@@ -374,18 +374,24 @@ func (m *Model) HandleKey(keyStr string) *ChannelResult {
 //     to the top so non-channel views are always discoverable. With a query,
 //     synthetic items rank by name match like everything else.
 //  2. Joined (members of the channel/DM come before non-members)
-//  3. Match tier: prefix > substring > subsequence (only when querying)
+//  3. Match tier, ascending: prefix > word-prefix > squashed-prefix >
+//     substring > subsequence (only when querying)
 //  4. LastVisited DESC (recency of user's last visit)
 //  5. Subsequence score DESC (only relevant in the subsequence tier)
 //  6. typeRank ASC (group_dm demoted; 1:1 DMs and channels equal)
 //  7. Name ASC (case-insensitive)
 //
-// Matching tiers:
-//  1. Prefix matches  (e.g. "eng" matches "engineering")
-//  2. Substring matches (e.g. "tomo" matches "ext-automote")
-//  3. Subsequence matches (e.g. "csp" matches "cs-product-triage" because
-//     c, s, p appear in order). Tighter matches with more word-boundary
-//     hits score higher.
+// Matching tiers, as defined by internal/fuzzy (lower is better). This list
+// had claimed THREE tiers long after the shared matcher grew to five, which is
+// half of B25 -- the other half being a local renumbering derived from the
+// stale count:
+//  1. TierPrefix          ("eng" matches "engineering")
+//  2. TierWordPrefix      (query matches at a word boundary)
+//  3. TierSquashedPrefix  (separators elided; short-word rule applies)
+//  4. TierSubstring       ("tomo" matches "ext-automote")
+//  5. TierSubsequence     ("csp" matches "cs-product-triage" because c, s, p
+//     appear in order). Tighter matches with more word-boundary hits score
+//     higher; this is the ONLY tier with a non-zero score.
 func (m *Model) filter() {
 	// Live updates can remove the selected forwarding destination.
 	defer func() {
@@ -412,20 +418,27 @@ func (m *Model) filter() {
 	}
 
 	type match struct {
-		idx   int
-		tier  int // 0 prefix, 1 substring, 2 subsequence
-		score int // subsequence score; 0 for prefix/substring
+		idx int
+		// tier is fuzzy.Tier itself, NOT a local renumbering. It used to be an
+		// int holding `int(tier) - 1`, mapping onto a pre-shared-matcher scheme
+		// of 0=prefix, 1=substring, 2=subsequence (B25). That expression was
+		// monotone, so the ordering was never wrong -- but it put tier identity
+		// in two numberings, and reordering the enum would have corrupted this
+		// one silently. The fuzzy.Tier constants are now pinned BY VALUE
+		// (fuzzy_test.go) precisely because consumers like this one compare them.
+		tier  fuzzy.Tier
+		score int // subsequence score; 0 for every other tier
 	}
 
 	var matches []match
 	for _, i := range idxs {
-		name := m.items[i].Name // Note: fuzzy.Match expects raw strings, it will fold them internally
-		tier, score, ok := fuzzy.Match(name, m.query)
+		// Raw name AND raw query: fuzzy.Match folds both internally. That is
+		// also why q (folded, above) is used only for the emptiness check --
+		// unlike emojipicker/reactionpicker, which pass their pre-folded query
+		// in and so have it re-folded per candidate (B26).
+		tier, score, ok := fuzzy.Match(m.items[i].Name, m.query)
 		if ok {
-			matches = append(matches, match{idx: i, tier: int(tier) - 1, score: score})
-			// wait, Match returns TierPrefix (1), TierSubstring (2), TierSubsequence (3).
-			// channelfinder originally used 0 for prefix, 1 for substring, 2 for subsequence.
-			// so tier - 1 is perfect.
+			matches = append(matches, match{idx: i, tier: tier, score: score})
 		}
 	}
 
@@ -444,7 +457,8 @@ func (m *Model) filter() {
 		if a.LastVisited != b.LastVisited {
 			return a.LastVisited > b.LastVisited
 		}
-		// 4. Subsequence score (only meaningful inside tier 2; ties at 0 elsewhere).
+		// 4. Subsequence score (only meaningful inside TierSubsequence; every
+		//    other tier scores 0, so this is a no-op tie there).
 		if matches[i].score != matches[j].score {
 			return matches[i].score > matches[j].score
 		}
