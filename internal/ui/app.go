@@ -910,13 +910,50 @@ func (a *App) threadInFront() bool {
 // — even while focus is elsewhere, such as the sidebar — consult this
 // instead of threadVisible alone.
 func (a *App) threadDrawnAlone() bool {
+	return a.threadDrawnAloneAt(a.zoomed)
+}
+
+// threadDrawnAloneAt is threadDrawnAlone's parameterised form: it asks
+// the question against a hypothetical zoom state rather than the
+// current one. Split out because zoomFrontIsThread has to probe the
+// UNZOOMED layout, and calling threadDrawnAlone from there while
+// a.zoomed is already true would be self-referential.
+func (a *App) threadDrawnAloneAt(zoomed bool) bool {
 	if !a.threadVisible {
 		return false
 	}
 	var scratch panelLayout
 	frame := scratch.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront(), a.zoomed)
+		a.sidebarVisible, a.threadVisible, a.threadInFront(), zoomed)
 	return frame.MsgWidth == 0
+}
+
+// zoomFrontIsThread reports whether zoom should promote the THREAD pane
+// rather than the messages pane.
+//
+// "Front" here means what threadInFront's doc says it means: the pane
+// the layout draws when it is too narrow for both. So zoom promotes the
+// thread exactly when the UNZOOMED layout would have stacked and left
+// the messages pane undrawn. When both panes fit side by side there is
+// no pane in front of the other, and zoom promotes the messages pane.
+//
+// Probing the unzoomed layout (rather than reading focusedPanel) is
+// also what keeps Tab from flipping WHICH pane is zoomed (G15): Tab
+// moves focus, but at a width where both panes fit, the branch that
+// decides the widths does not consult focus at all.
+func (a *App) zoomFrontIsThread() bool {
+	return a.threadDrawnAloneAt(false)
+}
+
+// layoutThreadFront is the threadFront argument every Compute call
+// site passes. While zoomed it resolves through zoomFrontIsThread so
+// the zoomed pane is the front pane; otherwise it is plain
+// threadInFront.
+func (a *App) layoutThreadFront() bool {
+	if a.zoomed {
+		return a.zoomFrontIsThread()
+	}
+	return a.threadInFront()
 }
 
 // computeFrame resolves this frame's layout from the App's state and
@@ -924,7 +961,7 @@ func (a *App) threadDrawnAlone() bool {
 // assembled; tests call it instead of repeating Compute's arguments.
 func (a *App) computeFrame() panelLayoutFrame {
 	return a.layout.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront(), a.zoomed)
+		a.sidebarVisible, a.threadVisible, a.layoutThreadFront(), a.zoomed)
 }
 
 func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
