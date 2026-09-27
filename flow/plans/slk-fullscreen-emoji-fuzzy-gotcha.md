@@ -290,6 +290,23 @@
   - The `head=` line is what made this detectable at all. A gate that did not
     print the commit it measured would have produced an undetectable false
     green — which is the argument for that line being mandatory, not decorative.
+  - **Extension, learned the hard way at `43c744e`: proving WHICH COMMIT is
+    checked out does not prove the tree is CLEAN.** I added the `head=`
+    cross-check to satisfy B9, ran `go test ./... -race` in `slkfz-int`, got 60
+    packages ok, and committed. All three gates then reported
+    `cmd/slk [build failed]` at the same commit. Both results were accurate: a
+    `sed` had repointed a changed call site in the working tree, that file was
+    missing from the commit's `git add` list, and my run measured *the working
+    tree plus an unstaged fix* while the gates measured the commit. The gates
+    caught it structurally — each runs after `git checkout -B` in its own
+    worktree, where an unstaged edit in a different worktree cannot follow it.
+    A verification claim therefore needs **two** facts, not one: the commit it
+    measured, and that nothing was uncommitted. The check is one line
+    (`git status --porcelain | wc -l`), and the failure it prevents is a commit
+    that does not compile sitting in history with a green report attached. This
+    is also the argument against `-race` in a dirty worktree as the last word
+    before a commit: verify from a clean detached checkout, or let the gate do
+    it.
 
 - **B11 The loop driver interrupted every turn it drove, because it tested for
   one hardcoded status code.** `agyralph.wait_turn` phase 1 waits for a step in
