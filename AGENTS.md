@@ -157,6 +157,21 @@ greppable by name; no line numbers, because these files move.
 | Make nav-history entries resolvable | `navLookupOpt()` (same file) |
 | Run only the first command of a `tea.Batch` (skip a 2s tick) | `firstBatchCmd(t, cmd)` (`internal/ui/mode_insert_keys_test.go`) |
 | Observe a compose cursor position or blur state (no getter exists) | `afterKeyValue(c, r)` (same file) |
+| An `App` zoomed, scrolled mid-history, with a selection | `zoomedScrolledApp(t)` (`internal/ui/fullscreen_red_test.go`) |
+| Enter zoom and assert the frame changed | `mustEnterZoom(t, a, frame)` (same file) |
+| Assert a frame is/isn't the zoomed layout | `assertZoomedFrame(t, a, zoomed, marker)` (same file) |
+| First differing line between two frames, for a diff message | `firstLineDiff(want, got)` (`internal/ui/golden_test.go`) |
+| Strip ANSI from a rendered frame | `stripANSI(s)` (`internal/ui/golden_test.go`) — a one-line wrapper over `ansi.Strip`. **`internal/ui/statusbar` has a second copy** (`statusbar/model_test.go`); call `ansi.Strip` directly in new packages rather than adding a third |
+| Emoji fixtures filtered from the real codemap | `entriesFor(t, names...)` (`internal/ui/emojipicker/fuzzy_test.go`) |
+| Names of a picker's filtered rows | `filteredNames(m)` — **declared twice**, `emojipicker/fuzzy_test.go` (value receiver) and `reactionpicker/fuzzy_test.go` (pointer receiver). Unexported, so neither is reachable from the other; the signatures differ, so consolidating means moving both models' shared shape first |
+| Is a name among a picker's rows? | `containsName(names, want)` — **declared twice**, same two files, identical bodies |
+
+The last four rows are the registration B34 found missing: all eight helpers
+existed and none were listed, which is precisely the condition this table exists
+to prevent. Three of them had already been written twice by the time anyone
+noticed. Treat the "declared twice" notes as debt, not as license — the
+`filteredNames`/`containsName` pair sits inside the two packages this repo's
+fuzzy work set out to unify behind one matcher.
 
 ### Known duplication — do not add to it
 

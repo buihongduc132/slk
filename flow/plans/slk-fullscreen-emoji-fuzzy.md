@@ -363,16 +363,26 @@ _(populated by gotcha-coverage + re-runs)_
       `Compute` (zoom-aware, `panellayout.go:81-87`), `PanelAt` (literal
       `height-1`, **no `zoomed` parameter**, `:157-159`, and `app.go:1829` passes
       none), and `reduceMouseClick` (its own `statusHeight := 1`,
-      `reducer_mouse.go:192`). So the pane draws on the last terminal row and both
-      hit-test paths discard clicks there. `fs-statusrow-math`'s central claim is
-      false; a golden cannot fail on a hit-test, so the render half was proven and
-      the routing half assumed.
-    - Resolution for B46 is the mandated one: **delete the two literals**, store
-      `statusHeight` on `panelLayout` where `Compute` already computes it. Do not
-      add a `zoomed` parameter callers can forget. For B45, pick one of the three
-      surfaces in `slk-fullscreen-emoji-fuzzy-gotcha-batch4.md` and **re-point the
-      oracle at the rendered frame**.
-    - `fs-statusrow-math` and `fs-supp-set` should read `[ ]` until both land.
+      `reducer_mouse.go:192`). `fs-statusrow-math`'s central claim — that the
+      override reaches all three — is false; a golden cannot fail on a hit-test,
+      so the render half was proven and the routing half assumed.
+    - **B46 SEVERITY CORRECTED, and B46 is now FIXED.** The delegate reported, and
+      I first repeated, that "a full row of content is mouse-dead whenever
+      zoomed". That is false. Measured by rendering the frame: at height 30 the
+      zoomed pane occupies rows 0–29 with its **border** on row 29, and content
+      ends at row 28 in both zoom states. The row `PanelAt` rejected was never
+      clickable content. The duplicate-rule mechanism is real and is a live trap
+      for the next change to border or status height, but **nothing was broken for
+      a user**. Recorded at Rank 5 for the mandated class, with the impact claim
+      withdrawn. Fixed by giving `panelLayout` a `zoomed bool` and one
+      `statusRows()` derivation that all three readers consult; pinned by
+      `internal/ui/zoom_lastrow_hittest_test.go` (4 tests, including a structural
+      one, because the only row the answers disagree about is the border and a
+      behavioural assertion there would be vacuous).
+    - **B45 is still open** and is the one with real user impact. For it, pick one
+      of the three surfaces in `slk-fullscreen-emoji-fuzzy-gotcha-batch4.md` and
+      **re-point the oracle at the rendered frame**. `fs-supp-set` should read
+      `[ ]` until it lands; `fs-statusrow-math` now holds.
 
 21. **Suppression covers one door, not the room; and `z` does not zoom the
     focused pane (B47, B48)** — Rank 4. `internal/ui/command.go` has **zero**

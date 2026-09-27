@@ -7,7 +7,6 @@ import (
 	"image"
 	imgpng "image/png"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,8 +60,17 @@ var kittyDiacritics = []rune{
 // dependency on internal/image's renderer.
 const PlaceholderRune = '\U0010EEEE'
 
+// inTmux reads TMUX through the package's injectable accessor, NOT through
+// os.Getenv directly (B35). capability.go:35 declares `var getenv = os.Getenv`
+// expressly so tests can inject values, and capability.go:26 already reads this
+// same variable through it — so a direct read here meant one variable, one
+// package, two reads, only one of them injectable. A test faking getenv to
+// simulate tmux saw the fake in capability.go and the real environment here, so
+// image-capability decisions could disagree with themselves inside one package.
+//
+// Per AGENTS.md the resolution for this class is delete one, never alias.
 func inTmux() bool {
-	return os.Getenv("TMUX") != ""
+	return getenv("TMUX") != ""
 }
 
 func wrapForTmux(seq string) string {

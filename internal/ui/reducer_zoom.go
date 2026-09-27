@@ -48,8 +48,20 @@ const zoomSuppressedToast = "Not available while zoomed — esc or z to exit zoo
 const zoomToastDuration = 2 * time.Second
 
 // enterZoom snapshots the front pane's viewport so exitZoom can put it
-// back, then zooms. Callers must already have checked !a.zoomed.
+// back, then zooms.
+//
+// The guard is a guard, not a comment (B52). This used to read "Callers
+// must already have checked !a.zoomed", which both siblings express as
+// actual code -- exitZoom and clearZoom each open with `if !a.zoomed`.
+// A second enterZoom would overwrite zoomSavedYOffset with the
+// already-scrolled offset and destroy the restore point permanently,
+// silently, the first time a second entry path was added. AGENTS.md:
+// when you find a comment standing in for a check, replace it with the
+// check.
 func (a *App) enterZoom() {
+	if a.zoomed {
+		return
+	}
 	a.zoomSavedYOffset = a.messagepane.YOffset()
 	a.zoomSavedSelectedIndex = a.messagepane.SelectedIndex()
 	a.zoomed = true
@@ -158,11 +170,23 @@ var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 		return nil, false
 	}
 
-	// Suppression. toastWithClear, NOT uploadToastCmd: the toast must be
-	// applied EAGERLY, because the status bar is read straight after
-	// Update without running the returned cmd. uploadToastCmd hides its
-	// setter inside a tea.Batch and 14 production call sites depend on
-	// that shape, so it must not be made eager.
+	// Suppression. toastEager, NOT toastDeferred: the toast must be applied
+	// EAGERLY, because the status bar is read straight after Update without
+	// running the returned cmd. The deferred mode hides its setter inside a
+	// tea.Batch, which 14 production call sites depend on, so that shape had
+	// to survive -- hence one helper with two modes rather than two helpers.
+	//
+	// This comment used to argue for `toastWithClear, NOT uploadToastCmd`.
+	// That helper no longer exists: the lane-toast consolidation (B2 / OT5)
+	// deleted it and preserved its body as the toastEager mode, so the comment
+	// was arguing against the call directly beneath it (B55).
+	//
+	// KNOWN DEFECT, do not read this as working: while zoomed, nothing
+	// composites the status row (app.go:3384-3386 sets status := ""), so this
+	// toast is INVISIBLE and every suppressed key is a silent no-op. B45 in
+	// flow/plans/slk-fullscreen-emoji-fuzzy-gotcha-batch4.md; the existing
+	// oracle cannot see it because statusbarText(a) reads the statusbar MODEL,
+	// whose field is set unconditionally.
 	if a.zoomSuppresses(km) {
 		return a.uploadToastCmd(zoomSuppressedToast, zoomToastDuration, toastEager), true
 	}

@@ -85,13 +85,57 @@ a unit marked `[x]` whose oracle observes a subject the defect cannot reach.
     and **a golden cannot fail on a hit-test**. The render half was proven; the
     routing half was assumed. The unit's text is therefore not wrong about what
     needed doing — only about what was done.
-  - Severity: one full row of content is mouse-dead whenever zoomed — clicks,
-    drag-selection anchors, reaction hit-testing — and it is the row the eye
-    lands on, since zoom exists to show more history. Silent, no error path.
-  - Mitigation: **delete the two literals.** Have `Compute` store `statusHeight`
-    on `panelLayout` beside the bands, and have both readers consult it. Do not
-    add a `zoomed` parameter to `PanelAt` that callers can forget — that
-    reproduces the class one level down.
+  - Severity as reported by the delegate, and as I first repeated it: "one full
+    row of content is mouse-dead whenever zoomed — clicks, drag-selection
+    anchors, reaction hit-testing — and it is the row the eye lands on."
+  - **SEVERITY CORRECTION — that claim is false, and I verified it false by
+    rendering the frame rather than reasoning about it.** At height 30 the
+    measured geometry is:
+
+    ```
+    unzoomed  rows 0..28 = pane (border at 0 and 28), row 29 = status row
+    zoomed    rows 0..29 = pane (border at 0 and 29), no status row
+    ```
+
+    So while zoomed the final terminal row holds the pane's bottom **border**
+    (`╰─────`), not content; content ends at row 28 in both states. The row
+    `PanelAt` was rejecting was never clickable content, clicking a border
+    correctly selects nothing, and **no content row was ever unreachable**. I
+    wrote a test asserting a click on row 29 must move the selection; it stayed
+    red after the fix, which is what sent me to measure. There is no
+    user-visible defect here.
+  - Severity, corrected: **latent, not live.** The mechanism below is real — one
+    rule, three implementations, two of them unaware of zoom — and it is a trap
+    that fires the moment the pane's border or the status height changes, because
+    two of the three readers would not follow. But nothing is broken for a user
+    today, and this is not Rank 5 on impact. It is recorded at Rank 5 for the
+    *class* (the mandated duplicate-rule shape, which AGENTS.md ranks as a real
+    defect regardless of current blast radius) with the impact claim withdrawn.
+  - Mitigation: **delete the two literals.** Have `Compute` store the fact on
+    `panelLayout` beside the bands, and have both readers consult it. Do not add
+    a `zoomed` parameter to `PanelAt` that callers can forget — that reproduces
+    the class one level down.
+  - **FIXED.** `panelLayout` gained a `zoomed bool` plus one derivation,
+    `statusRows()`; `Compute`, `PanelAt` and `reduceMouseClick` all read it and
+    both literals are gone.
+    - A `bool` rather than a stored `statusHeight int`, for a reason worth
+      keeping: tests seed the bands directly without calling `Compute`
+      (`app_panelat_test.go:37-40`), so a zero-valued height field would have
+      read as "reserve nothing" = "zoomed" and silently changed unrelated tests.
+      The zero value has to be the safe one.
+    - Pinned by `internal/ui/zoom_lastrow_hittest_test.go`, in its own file
+      because `fullscreen_red_test.go` is a pinned gate oracle (OT17). Four
+      tests: last row hit-tests to a pane while zoomed; `Compute` and `PanelAt`
+      agree at both zoom states; the last *content* row is clickable while
+      zoomed; and a **structural** assertion that `reducer_mouse.go` consults
+      `a.layout.statusRows()` and declares no `statusHeight := 1`.
+    - The structural oracle exists because no behavioural test can catch that
+      third implementation: the only row the two answers disagree about is the
+      border, where a click correctly selects nothing either way. A behavioural
+      assertion there would be vacuous by construction — so the honest instrument
+      for "one source of truth" is to read the source, the same shape as
+      `cmd/slk/startup_order_test.go` (B18). RED-proven both directions:
+      reintroducing the literal fires both of its assertions.
   - Evidence: `internal/ui/panellayout.go:80-87,157-159`; `internal/ui/app.go:1829`;
     `internal/ui/reducer_mouse.go:192-193`. All re-verified by me, including the
     absence of `zoomed` from the `PanelAt` signature.

@@ -189,8 +189,10 @@ func reduceMouseClick(a *App, m tea.MouseClickMsg) tea.Cmd {
 	// no-op). Prevents a post-click selection jump when the tick fires.
 	a.scrollPending = 0
 	x := m.X
-	statusHeight := 1
-	if m.Y >= a.height-statusHeight {
+	// Status-row rows come from the layout, not from a literal here: while
+	// zoomed no status row is drawn, so reserving one made the zoomed pane's
+	// last row unclickable even though it renders there (B46).
+	if m.Y >= a.height-a.layout.statusRows() {
 		return nil // click on status bar, ignore
 	}
 
