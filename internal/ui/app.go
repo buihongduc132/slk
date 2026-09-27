@@ -3597,7 +3597,7 @@ const maxAttachmentSize = 10 * 1024 * 1024 // 10 MB cap
 // progress; the actual UploadResultMsg arm in Update clears it.
 func (a *App) submitWithAttachments(c *compose.Model) tea.Cmd {
 	if a.editing.IsActive() {
-		return a.uploadToastCmd("Cannot attach files to an edit (send a new message)", 3*time.Second)
+		return a.uploadToastCmd("Cannot attach files to an edit (send a new message)", 3*time.Second, toastDeferred)
 	}
 	attachments := c.Attachments()
 	if len(attachments) == 0 {
@@ -3614,13 +3614,13 @@ func (a *App) submitWithAttachments(c *compose.Model) tea.Cmd {
 		threadTS = ""
 	}
 	if channelID == "" || a.files == nil {
-		return a.uploadToastCmd("Cannot upload: no active channel", 2*time.Second)
+		return a.uploadToastCmd("Cannot upload: no active channel", 2*time.Second, toastDeferred)
 	}
 
 	c.SetUploading(true)
 	cmds := []tea.Cmd{
 		teaCmd(a.files.Upload(channelID, threadTS, caption, attachments)),
-		a.uploadToastCmd(fmt.Sprintf("Uploading 0/%d…", len(attachments)), 30*time.Second),
+		a.uploadToastCmd(fmt.Sprintf("Uploading 0/%d…", len(attachments)), 30*time.Second, toastDeferred),
 	}
 	return tea.Batch(cmds...)
 }
@@ -3671,8 +3671,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		if int64(len(imgBytes)) > maxAttachmentSize {
 			return true, a.uploadToastCmd(
 				fmt.Sprintf("Image too large (%s > 10 MB limit)", humanSize(int64(len(imgBytes)))),
-				3*time.Second,
-			)
+				3*time.Second, toastDeferred)
+
 		}
 		filename := "slk-paste-" + time.Now().Format("2006-01-02-15-04-05") + ".png"
 		target.AddAttachment(core.PendingAttachment{
@@ -3683,8 +3683,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		})
 		return true, a.uploadToastCmd(
 			fmt.Sprintf("Attached: %s (%s)", filename, humanSize(int64(len(imgBytes)))),
-			2*time.Second,
-		)
+			2*time.Second, toastDeferred)
+
 	}
 
 	// 2. File-path text.
@@ -3692,10 +3692,10 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		info, err := a.desktop.Stat(path)
 		if err == nil && info.Mode().IsRegular() {
 			if info.Size() > maxAttachmentSize {
-				return true, a.uploadToastCmd("File too large (>10 MB limit)", 3*time.Second)
+				return true, a.uploadToastCmd("File too large (>10 MB limit)", 3*time.Second, toastDeferred)
 			}
 			if info.Size() == 0 {
-				return true, a.uploadToastCmd("Empty file", 2*time.Second)
+				return true, a.uploadToastCmd("Empty file", 2*time.Second, toastDeferred)
 			}
 			filename := filepath.Base(path)
 			target.AddAttachment(core.PendingAttachment{
@@ -3706,8 +3706,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 			})
 			return true, a.uploadToastCmd(
 				fmt.Sprintf("Attached: %s (%s)", filename, humanSize(info.Size())),
-				2*time.Second,
-			)
+				2*time.Second, toastDeferred)
+
 		}
 	}
 
@@ -4163,9 +4163,20 @@ func resolveFilePath(text string) (string, bool) {
 	return filepath.Clean(s), true
 }
 
-// uploadToastCmd builds a tea.Cmd that sets the status bar to the
-// given message and schedules a CopiedClearMsg after dur.
-func (a *App) uploadToastCmd(text string, dur time.Duration) tea.Cmd {
+type toastMode int
+
+const (
+	toastEager toastMode = iota
+	toastDeferred
+)
+
+// uploadToastCmd sets the status bar to the given message and schedules a clear.
+// The eager mode applies it immediately. The deferred mode applies it when the returned batch runs.
+func (a *App) uploadToastCmd(text string, dur time.Duration, mode toastMode) tea.Cmd {
+	if mode == toastEager {
+		a.statusbar.SetToast(text)
+		return copiedClearAfter(dur)
+	}
 	return tea.Batch(
 		func() tea.Msg {
 			a.statusbar.SetToast(text)

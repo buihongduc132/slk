@@ -74,7 +74,7 @@ func executeCommand(a *App, line string) tea.Cmd {
 	}
 	fn, ok := commands[fields[0]]
 	if !ok {
-		return toastWithClear(a, "Unknown command: "+fields[0], 2*time.Second)
+		return a.uploadToastCmd("Unknown command: "+fields[0], 2*time.Second, toastEager)
 	}
 	return fn(a, fields[1:])
 }

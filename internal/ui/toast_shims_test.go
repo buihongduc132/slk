@@ -27,11 +27,11 @@ import (
 func toastEagerForTest(t *testing.T, a *App, text string, d time.Duration) tea.Cmd {
 	t.Helper()
 	// CONSOLIDATION: repoint at the single helper's EAGER mode.
-	return toastWithClear(a, text, d)
+	return a.uploadToastCmd(text, d, toastEager)
 }
 
 func toastDeferredForTest(t *testing.T, a *App, text string, d time.Duration) tea.Cmd {
 	t.Helper()
 	// CONSOLIDATION: repoint at the single helper's DEFERRED mode.
-	return a.uploadToastCmd(text, d)
+	return a.uploadToastCmd(text, d, toastDeferred)
 }

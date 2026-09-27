@@ -321,7 +321,7 @@ func (a *App) retargetActiveChannel(id, name, chType string) {
 // flag.
 func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 	if a.compose.Uploading() || a.threadCompose.Uploading() {
-		return a.uploadToastCmd("Upload in progress", 2*time.Second), false
+		return a.uploadToastCmd("Upload in progress", 2*time.Second, toastDeferred), false
 	}
 	// Perf instrumentation: wall-clock the synchronous portion of the
 	// channel-switch reducer. This covers everything up to and including
