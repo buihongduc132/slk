@@ -1562,7 +1562,14 @@ func run() error {
 
 			readyStatuses := cachedPeerStatuses(db, wctx.TeamID)
 			wctx.PeerStatus.SeedHuddles(readyStatuses)
-			go runStartupEmoji(ctx, wctx, db, wctx.Client, p, wctx.TeamID)
+			// fs/emoji cold start (B18): the seed is SYNCHRONOUS and the
+			// fetch is not. WorkspaceReadyMsg reads wctx.CustomEmoji()
+			// a few lines below, so seeding in a goroutine made the
+			// message carry whichever set won a scheduling coin flip --
+			// an atomic.Pointer VALUE race, invisible to -race, with a
+			// first paint that varied run to run. Seeding here costs one
+			// indexed SQLite read and makes the message determinate.
+			seedCustomEmojiFromCache(wctx, db, wctx.TeamID)
 			p.Send(ui.WorkspaceReadyMsg{
 				TeamID:           wctx.TeamID,
 				TeamName:         wctx.TeamName,
@@ -1584,9 +1591,13 @@ func run() error {
 
 			// Fetch the workspace's custom emoji in the background. When
 			// done, a follow-up message makes rendering and the emoji
-			// picker pick up the full set. Runs unconditionally — see
-			// fetchWorkspaceEmoji for why the bootstrap subset must not
-			// be treated as an answer.
+			// picker pick up the full set, and the set is persisted for the
+			// next cold start. Runs unconditionally — see
+			// fetchWorkspaceEmojiIntoCache for why the bootstrap subset must
+			// not be treated as an answer. Deliberately AFTER the
+			// WorkspaceReadyMsg send: only the cache seed above may precede
+			// it, and only because it is synchronous (B18).
+			go fetchWorkspaceEmojiIntoCache(ctx, wctx, wctx.Client, p, wctx.TeamID, db)
 
 			// Fetch workspace usergroups in the background. When done,
 			// send a follow-up so render caches and compose pickers can

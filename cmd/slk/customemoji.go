@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-
-	"github.com/gammons/slk/internal/ui"
 )
 
 // customEmojiLister is the one-method slice of *slackclient.Client that
@@ -17,34 +15,14 @@ type customEmojiLister interface {
 	ListCustomEmoji(ctx context.Context) (map[string]string, error)
 }
 
-// fetchWorkspaceEmoji publishes the workspace's full custom emoji set
-// and tells the UI to re-render with it.
+// The emoji fetch itself lives in customemojiseed.go as
+// fetchWorkspaceEmojiIntoCache, together with the cache seed that must precede
+// WorkspaceReadyMsg.
 //
-// It runs UNCONDITIONALLY, and that is the whole point of it. Bootstrap
-// may already have published a map, but conversations.view returns only
-// the emoji the restored conversation uses — a per-conversation subset,
-// not the workspace's set. An earlier version skipped emoji.list
-// whenever that subset was non-empty, which left every channel other
-// than the restored one rendering custom emoji as literal `:name:`.
-// TestFetchWorkspaceEmoji_RunsEvenWhenBootstrapPublishedASubset pins
-// that so the short-circuit cannot come back.
-//
-// Best-effort: on error nothing is published and nothing is sent, so
-// the bootstrap subset (or the built-ins) stays in place rather than
-// being cleared.
-//
-// Intended to be run in a goroutine, after WorkspaceReadyMsg, so it
-// never blocks first paint.
-func fetchWorkspaceEmoji(ctx context.Context, wctx *WorkspaceContext, client customEmojiLister, sender teaSender, teamID string) {
-	emojis, err := client.ListCustomEmoji(ctx)
-	if err != nil {
-		return
-	}
-	wctx.SetCustomEmoji(emojis)
-	if sender != nil {
-		sender.Send(ui.CustomEmojisLoadedMsg{
-			TeamID:      teamID,
-			CustomEmoji: emojis,
-		})
-	}
-}
+// There used to be a second copy here, fetchWorkspaceEmoji, identical except
+// for the cache upsert. Production called only the copy in customemojiseed.go,
+// so this one was dead — while carrying the only written record of why the
+// fetch must run unconditionally, and while four tests pointed at it and
+// "kept passing" over code nobody ran (B19). Deleted per the repo rule for the
+// same logic under two spellings: DELETE one, never alias. Its comment moved
+// onto the survivor.

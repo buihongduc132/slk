@@ -2,6 +2,7 @@ package cache
 
 import (
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------
@@ -252,6 +253,78 @@ func TestCustomEmoji_TableShape(t *testing.T) {
 		if _, ok := got[col]; !ok {
 			t.Errorf("custom_emoji has no %q column; shape per plan emoji-cache-table. Columns: %v", col, got)
 		}
+	}
+}
+
+// B21: updated_at must actually be WRITTEN, not merely declared.
+//
+// TestCustomEmoji_TableShape above probes PRAGMA table_info and asserts the
+// column exists. It passed for the entire life of the bug: the column was
+// declared NOT NULL DEFAULT 0 and omitted from the INSERT, so every row read
+// back as 0 forever and no reader could distinguish a set cached minutes ago
+// from one cached months ago. A schema assertion is not a write assertion.
+//
+// Three properties, each of which can fail independently:
+//   - non-zero, which is the write itself;
+//   - one distinct value per team's set, which is the invariant the upsert's
+//     own comment claims ("ONE timestamp taken before the loop, so every row in
+//     a team's set shares it and a reader can treat the set as a unit") -- a
+//     comment asserting an invariant with no check is the thing AGENTS.md says
+//     to replace with the check;
+//   - plausibly now, in SECONDS. This is the unit trap: UnixMilli() would be
+//     non-zero AND uniform, satisfying the first two while being 1000x off and
+//     silently breaking any staleness arithmetic. The repo convention is
+//     seconds (see thread_subscriptions.go, "Bumps updated_at to
+//     time.Now().Unix()"). The window is deliberately generous -- it is
+//     checking the unit, not the clock.
+func TestCustomEmoji_UpsertWritesUpdatedAt(t *testing.T) {
+	db := newCustomEmojiDB(t)
+
+	before := time.Now().Unix()
+	if err := db.UpsertCustomEmoji("TA", map[string]string{
+		"a-emoji": "https://example.test/a.png",
+		"b-emoji": "https://example.test/b.png",
+		"c-emoji": "alias:a-emoji",
+	}); err != nil {
+		t.Fatalf("UpsertCustomEmoji: %v", err)
+	}
+	after := time.Now().Unix()
+
+	rows, err := db.conn.Query("SELECT DISTINCT updated_at FROM custom_emoji WHERE team_id = ?", "TA")
+	if err != nil {
+		t.Fatalf("querying updated_at: %v", err)
+	}
+	defer rows.Close()
+
+	var stamps []int64
+	for rows.Next() {
+		var ts int64
+		if err := rows.Scan(&ts); err != nil {
+			t.Fatalf("scanning updated_at: %v", err)
+		}
+		stamps = append(stamps, ts)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterating updated_at: %v", err)
+	}
+
+	// V3: prove the query matched something. Zero rows would make every
+	// assertion below vacuously true.
+	if len(stamps) == 0 {
+		t.Fatal("no custom_emoji rows for TA after an upsert of three emoji; the write did not land")
+	}
+	if len(stamps) != 1 {
+		t.Errorf("updated_at has %d distinct values across one team's set (%v), want 1 -- the whole set must share a single timestamp so a reader can treat it as a unit", len(stamps), stamps)
+	}
+
+	got := stamps[0]
+	if got == 0 {
+		t.Fatal("updated_at = 0, i.e. the column's DEFAULT: the INSERT is not writing it, so nothing can tell a fresh cached set from a months-old one (B21)")
+	}
+	// Generous bounds: this is a unit check, not a clock check. Unix() seconds
+	// land inside [before, after]; UnixMilli() would overshoot by ~1000x.
+	if got < before-60 || got > after+60 {
+		t.Errorf("updated_at = %d, outside the plausible window [%d, %d]. If it is ~1000x too large the write is using UnixMilli(); the repo convention is time.Now().Unix() seconds.", got, before-60, after+60)
 	}
 }
 

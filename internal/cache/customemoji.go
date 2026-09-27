@@ -1,14 +1,21 @@
 // internal/cache/customemoji.go
 //
-// RED-phase stub for plan slk-fullscreen-emoji-fuzzy item
-// emoji-cache-table. Signatures are FINAL (the cmd/slk wiring seam
-// in customemojiseed.go mirrors them); the bodies are zero-logic so
-// customemoji_test.go fails as assertions, not build errors. The
-// GREEN implementation adds the custom_emoji(team_id, name, value,
-// updated_at) table to migrate() (pattern: `workspaces`, db.go:79)
-// and makes the upsert one team-scoped transaction (DELETE by team +
-// INSERT), safe under the foreign_keys(ON) DSN (db.go:37).
+// Per-workspace custom emoji persistence for plan item emoji-cache-table:
+// the custom_emoji(team_id, name, value, updated_at) table declared in
+// migrate() (pattern: `workspaces`, db.go:79), read as a whole set, replaced
+// as a whole set in one team-scoped transaction.
+//
+// Read contract, relied on by the cmd/slk seed: a cache MISS is an empty,
+// non-nil map with a NIL error. That is deliberate at this boundary — the UI
+// never has to surface a cache error. It is also a trap one layer up: an empty
+// map published into a WorkspaceContext CLEARS whatever is there, so the seed
+// must check emptiness rather than just `err == nil` (B17).
+//
+// (This header described a RED-phase stub with zero-logic bodies until the
+// feature landed; it outlived that by several commits.)
 package cache
+
+import "time"
 
 // CustomEmoji returns teamID's cached custom emoji set (name ->
 // URL-or-"alias:target"). A cache miss is an EMPTY, non-nil map and
@@ -48,8 +55,15 @@ func (db *DB) UpsertCustomEmoji(teamID string, emojis map[string]string) error {
 		return err
 	}
 
+	// updated_at is written from ONE timestamp taken before the loop, so every
+	// row in a team's set shares it and a reader can treat the set as a unit.
+	// It was previously omitted (B21): the column is NOT NULL DEFAULT 0, so
+	// every row read back as 0 forever and nothing could distinguish a set
+	// cached minutes ago from months ago. Every other table in this schema
+	// writes it -- channels.go, users.go, thread_subscriptions.go.
+	now := time.Now().Unix()
 	for name, value := range emojis {
-		if _, err := tx.Exec("INSERT INTO custom_emoji (team_id, name, value) VALUES (?, ?, ?)", teamID, name, value); err != nil {
+		if _, err := tx.Exec("INSERT INTO custom_emoji (team_id, name, value, updated_at) VALUES (?, ?, ?, ?)", teamID, name, value, now); err != nil {
 			return err
 		}
 	}

@@ -39,24 +39,21 @@ func newSeedTestDB(t *testing.T) *cache.DB {
 	return db
 }
 
-// G13: the seed must never hit the network. A lister that IS called
-// fails the test — recorded, not assumed.
-func TestSeedCustomEmojiFromCache_NeverCallsTheLister(t *testing.T) {
-	wctx := &WorkspaceContext{}
-	db := newSeedTestDB(t)
-	if err := db.UpsertCustomEmoji("T1", map[string]string{
-		"cached-parrot": "https://example.test/parrot.gif",
-	}); err != nil {
-		t.Fatalf("priming the cache: %v", err)
-	}
-
-	lister := &fakeEmojiLister{result: map[string]string{"net": "https://example.test/net.png"}}
-	seedCustomEmojiFromCache(wctx, db, "T1", lister)
-
-	if got := lister.callCount(); got != 0 {
-		t.Errorf("ListCustomEmoji called %d times during the seed, want 0 — the seed reads SQLite only, never the network (G13)", got)
-	}
-}
+// G13 "the seed never hits the network" is now a COMPILE-TIME guarantee, not a
+// test: seedCustomEmojiFromCache's signature is (wctx, db, teamID) and takes no
+// client at all, so it cannot make a network call. There is nothing left to
+// assert at runtime.
+//
+// TestSeedCustomEmojiFromCache_NeverCallsTheLister used to live here and was
+// deleted as vacuous (B23). It built a fakeEmojiLister, passed it to a parameter
+// the declaration discarded as `_`, and asserted callCount == 0 — something the
+// compiler already guaranteed for any function body whatsoever. The mechanical
+// half of this fix made it worse, not better: with the parameter dropped, the
+// test asserted that an object it never handed to anyone had not been called.
+//
+// A signature that makes the bad state unrepresentable beats an assertion about
+// it. TestStartupEmojiOrder_SeedBeforeFetch below carries the rest of G13 — the
+// ordering — via a probe that can actually fail.
 
 // Cold start: customs come out of the cache and land in wctx before
 // any fetch runs.
@@ -71,7 +68,7 @@ func TestSeedCustomEmojiFromCache_PublishesTheCachedSet(t *testing.T) {
 		t.Fatalf("priming the cache: %v", err)
 	}
 
-	seedCustomEmojiFromCache(wctx, db, "T1", &fakeEmojiLister{})
+	seedCustomEmojiFromCache(wctx, db, "T1")
 
 	got := wctx.CustomEmoji()
 	if len(got) != len(cached) {
@@ -90,7 +87,7 @@ func TestSeedCustomEmojiFromCache_MissPublishesEmpty(t *testing.T) {
 	wctx := &WorkspaceContext{}
 	db := newSeedTestDB(t)
 
-	seedCustomEmojiFromCache(wctx, db, "T_UNKNOWN", &fakeEmojiLister{})
+	seedCustomEmojiFromCache(wctx, db, "T_UNKNOWN")
 
 	got := wctx.CustomEmoji()
 	if got == nil || len(got) != 0 {
@@ -98,13 +95,28 @@ func TestSeedCustomEmojiFromCache_MissPublishesEmpty(t *testing.T) {
 	}
 }
 
-// G13: recorded call order at startup must be seed-from-cache FIRST,
-// fetchWorkspaceEmoji SECOND. The probe is the lister itself: it
-// snapshots wctx.CustomEmoji() at the moment emoji.list is called.
-// If the seed ran first, that snapshot contains the CACHED set; if
-// the fetch ran first (or no seed ran at all), it does not.
-// runStartupEmoji is the composition seam (stub today; the GREEN
-// body wires seed -> fetch the way the connect path calls them).
+// runStartupEmoji WAS a production function that called seed then fetch back to
+// back. It is gone, and its absence is the B18 fix: production must seed
+// SYNCHRONOUSLY before WorkspaceReadyMsg and fetch in a goroutine AFTER it, so
+// no single function can sit on both sides of the message send.
+//
+// It survives here as a test-local composition so the three pipeline tests below
+// keep their subject. Be honest about what that costs: a helper defined by this
+// file cannot prove production's ordering, because it IMPOSES the order it then
+// asserts. It pins the pair's behaviour (one fetch, fresher set wins, message
+// published), not the call site.
+//
+// TestStartupEmojiCallSite_SeedBeforeReadyMsg is the row that pins the ordering
+// that actually matters, by reading main.go.
+func runStartupEmoji(ctx context.Context, wctx *WorkspaceContext, db *cache.DB, client customEmojiLister, sender teaSender, teamID string) {
+	seedCustomEmojiFromCache(wctx, db, teamID)
+	fetchWorkspaceEmojiIntoCache(ctx, wctx, client, sender, teamID, db)
+}
+
+// G13: recorded call order must be seed-from-cache FIRST, fetch SECOND. The
+// probe is the lister itself: it snapshots wctx.CustomEmoji() at the moment
+// emoji.list is called. If the seed ran first, that snapshot contains the CACHED
+// set; if the fetch ran first (or no seed ran at all), it does not.
 type orderProbingLister struct {
 	wctx *WorkspaceContext
 
@@ -240,13 +252,12 @@ func TestSeedCustomEmojiFromCache_TwoTeamIsolation(t *testing.T) {
 		t.Fatalf("priming TB: %v", err)
 	}
 
-	lister := &fakeEmojiLister{} // never called; see the G13 test
 	for _, team := range []struct{ id, want string }{
 		{"TA", "a-emoji"},
 		{"TB", "b-emoji"},
 	} {
 		wctx := &WorkspaceContext{}
-		seedCustomEmojiFromCache(wctx, db, team.id, lister)
+		seedCustomEmojiFromCache(wctx, db, team.id)
 		got := wctx.CustomEmoji()
 		if got[team.want] == "" {
 			t.Errorf("seed for %s did not publish %q; set = %v", team.id, team.want, got)
@@ -274,11 +285,9 @@ func TestSeedFeedsSwitchMsg_PerActiveTeam(t *testing.T) {
 	if err := db.UpsertCustomEmoji("TB", map[string]string{"b-emoji": "https://example.test/b.png"}); err != nil {
 		t.Fatalf("priming TB: %v", err)
 	}
-	lister := &fakeEmojiLister{}
-
 	build := func(teamID string) ui.WorkspaceSwitchedMsg {
 		wctx := &WorkspaceContext{TeamID: teamID}
-		seedCustomEmojiFromCache(wctx, db, teamID, lister)
+		seedCustomEmojiFromCache(wctx, db, teamID)
 		return ui.WorkspaceSwitchedMsg{TeamID: teamID, CustomEmoji: wctx.CustomEmoji()}
 	}
 
