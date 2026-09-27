@@ -379,10 +379,23 @@ _(populated by gotcha-coverage + re-runs)_
       `internal/ui/zoom_lastrow_hittest_test.go` (4 tests, including a structural
       one, because the only row the answers disagree about is the border and a
       behavioural assertion there would be vacuous).
-    - **B45 is still open** and is the one with real user impact. For it, pick one
-      of the three surfaces in `slk-fullscreen-emoji-fuzzy-gotcha-batch4.md` and
-      **re-point the oracle at the rendered frame**. `fs-supp-set` should read
-      `[ ]` until it lands; `fs-statusrow-math` now holds.
+    - **B45 is FIXED**, and it was the one with real user impact.
+      `App.overlayZoomToast` paints a live toast onto the zoomed frame's last row
+      — the pane's bottom *border* row, so it costs no content and no reflow,
+      which is the option B46's measurement made available. `statusbar.Model`
+      gained a `Toast()` getter; the overlay runs before `applyOverlays` so modals
+      still draw over it.
+    - The memo was the half a naive fix would have missed: the screen memo is
+      keyed on `(panels, status, w, h)` and `status` is always `""` while zoomed,
+      so a toast changed no memo input and the stale frame would be served —
+      invisible in exactly the case the fix exists for. `View()` now folds the
+      toast into the key while zoomed. Pinned by
+      `internal/ui/zoom_toast_visible_test.go`, asserting on
+      `stripANSI(a.View().Content)` rather than `statusbarText`, because the
+      latter is the channel that hid the defect.
+    - Both `fs-statusrow-math` and `fs-supp-set` now hold on the mechanisms B45
+      and B46 named. `fs-supp-set`'s *other* half — command mode — is still open
+      as B47 below.
 
 21. **Suppression covers one door, not the room; and `z` does not zoom the
     focused pane (B47, B48)** — Rank 4. `internal/ui/command.go` has **zero**

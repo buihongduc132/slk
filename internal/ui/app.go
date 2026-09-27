@@ -3394,9 +3394,19 @@ func (a *App) View() tea.View {
 	// change without bumping any base-panel version, and the preview
 	// panel is rendered fresh (uncached) each frame.
 	canMemo := !previewActive && !a.overlayActive()
+	// Memo key, not the rendered row. While zoomed `status` is always "", so a
+	// toast appearing changed NO memo input and the stale pre-toast frame was
+	// served — which would have made the B45 fix invisible in exactly the case
+	// it exists for. Folding the toast into the key costs nothing when unzoomed
+	// (the status row already carries the toast, so its text is part of
+	// `status`) and only ever adds an invalidation, never suppresses one.
+	statusKey := status
+	if a.zoomed {
+		statusKey = a.statusbar.Toast()
+	}
 	var screen string
 	memoHit := false
-	if canMemo && a.screenMemoMatches(panels, status, a.width, a.height) {
+	if canMemo && a.screenMemoMatches(panels, statusKey, a.width, a.height) {
 		screen = a.lastScreen
 		memoHit = true
 	} else {
@@ -3415,10 +3425,14 @@ func (a *App) View() tea.View {
 		// of the composite cost). stackContentStatus reproduces lipgloss's
 		// left-align padding byte-for-byte; see its doc.
 		screen = stackContentStatus(content, status)
+		// A zoomed frame has no status row, so a toast set while zoomed would
+		// reach no pixels (B45). Paint it on the pane's bottom border row,
+		// BEFORE applyOverlays so a modal still draws over it.
+		screen = a.overlayZoomToast(screen)
 		screen = a.applyOverlays(screen)
 		screen = a.maybeWrapFinalScreen(screen)
 		if canMemo {
-			a.storeScreenMemo(panels, status, a.width, a.height, screen)
+			a.storeScreenMemo(panels, statusKey, a.width, a.height, screen)
 		} else {
 			// Overlay/preview output is not memoizable; force the next
 			// memoizable frame to recompute.

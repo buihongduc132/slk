@@ -203,6 +203,16 @@ func (m *Model) ShowCopied(n int) {
 	m.SetToast(fmt.Sprintf("Copied %d chars", n))
 }
 
+// Toast returns the live toast text, or "" when none is set.
+//
+// Added for B45: while a pane is zoomed the App composites no status row, so a
+// toast set there is invisible. The App needs to read it back to paint it
+// elsewhere, and it needs the value in its screen-memo key — a toast appearing
+// must invalidate the memo, which it cannot do if the App can only set and
+// never read. Test code should still prefer asserting on the composed frame:
+// this getter observes the model, which is the channel B45 hid behind.
+func (m *Model) Toast() string { return m.toast }
+
 // ClearCopied removes any toast.
 func (m *Model) ClearCopied() {
 	m.SetToast("")

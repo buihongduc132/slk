@@ -57,6 +57,32 @@ a unit marked `[x]` whose oracle observes a subject the defect cannot reach.
     offers as its alternative). Whichever is chosen, **re-point the oracle at the
     rendered frame** — a substring assertion on `View()` output, or a golden —
     not at `statusbarText`.
+  - **FIXED.** `App.overlayZoomToast` (`view_status.go`) paints a live toast onto
+    the last row of an already-composed zoomed frame; `statusbar.Model` gained a
+    `Toast()` getter so the App can read back what it set.
+    - The **last row** rather than a reserved row, for the reason B46's severity
+      correction established by measurement: that row holds the pane's bottom
+      *border*, not content, so overwriting it costs no content and no reflow.
+      Reserving a row would shrink `ContentHeight` and make the zoomed frame no
+      longer full-height, which fs-statusrow-math and its golden both pin.
+    - Applied BEFORE `applyOverlays` so a modal still draws over it.
+    - **The memo was the trap, and it is the half a naive fix would miss.** The
+      screen memo is keyed on `(panels, status, w, h)` and `status` is always `""`
+      while zoomed — so a toast appearing changed no memo input and the stale
+      pre-toast frame would be served, making the fix invisible in exactly the
+      case it exists for. `View()` now keys on the toast text while zoomed.
+      `TestZoom_ToastDefeatsTheScreenMemoWhileZoomed` was RED for this reason
+      alone, with the overlay already written.
+    - Pinned by `internal/ui/zoom_toast_visible_test.go`: the toast is visible in
+      a zoomed frame, a suppressed key changes the frame bytes, and exiting zoom
+      restores the real status row. All assert on `stripANSI(a.View().Content)` —
+      the channel the user observes — never on `statusbarText`.
+    - Note on the control leg, which was wrong in its first draft: it cannot press
+      `ctrl+b` unzoomed to establish "a toast can render", because unzoomed
+      `ctrl+b` is not suppressed at all, it toggles the sidebar. The suppression
+      path exists *only* while zoomed, which is precisely why its only oracle was
+      a model getter. The control now sets the toast directly and renders
+      unzoomed.
   - Evidence: `internal/ui/reducer_zoom.go:42-45,161-167`;
     `internal/ui/app.go:3384-3386,4198-4200`; `internal/ui/panellayout.go:81-83`.
     All re-verified by me; the `app.go:3384` conditional is the link the delegate
