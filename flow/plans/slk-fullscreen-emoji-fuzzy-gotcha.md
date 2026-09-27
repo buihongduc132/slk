@@ -192,6 +192,40 @@
   `scratch|patch_|fix_|.orig|.rej` but not `.ralph/` — a denylist only catches
   what it already knows.
 
+- **B11 The loop driver interrupted every turn it drove, because it tested for
+  one hardcoded status code.** `agyralph.wait_turn` phase 1 waits for a step in
+  `STATUS_IN_PROGRESS = 8` to appear. This agy build never writes 8: across 44
+  recorded histograms from four runs the only statuses observed were **2, 3 and
+  7**, and the executing step is status **2** (`{2: 1, 3: 91, 7: 1}` — one row
+  running, 91 done). So phase 1 could not fire; every turn fell through to the
+  "no in-progress step appeared" fallback, which returns after 3 stable reads
+  ≈9s, and phase 2's `counts.get(8) == 0` was true on its first read. Result:
+  **each turn was declared finished ~9s after it was sent**, the next round
+  message was posted on top of an agent still working, and the harvest caught a
+  thinking preamble instead of an answer. This is what burned 15 + 32
+  iterations in ~2m25s of wall clock. Fixed in the scratch copy by enumerating
+  the TERMINAL set (`{3, 7}`) and treating everything else as pending, plus
+  requiring `MAX(idx)` stable for 4 consecutive reads before calling a turn
+  done — a long tool call keeps exactly one row non-terminal for its whole
+  duration, which is what stops a 47s `go test -race` from reading as silence.
+  Generalizable, and the counterpart to B8: **poll for the absence of
+  non-terminal work, never for the presence of one status value.** An
+  enumerated in-progress code is a version pin nobody declared.
+
+- **B12 The circuit breaker disarmed a correct gate, and the loop then ran 11
+  iterations blind past its own success.** Second occurrence of B7, worse: the
+  breaker auto-disabled check `7ebaafdd` after 5 consecutive failures at
+  iteration 21, and those 5 failures were all legitimate (the tree genuinely
+  did not compile). But the agent's next edit *fixed* it — and with the gate
+  disarmed nothing was left to notice, so the run continued to iteration 32 and
+  exited `status=failed reason=max_iterations_reached` **on a tree whose gate
+  was green**. The verdict was recovered only by re-running the gate by hand
+  (exit 0), which is what gated-dev step 9 mandates anyway. A breaker that
+  cannot distinguish "this check is broken" from "this check is working and the
+  answer is no" must not be the thing that decides to stop looking; consecutive
+  failures are the *expected* shape of a red gate mid-refactor. It should trip
+  on gate-invalid (exit 2 / 125), not on red (exit 1).
+
 ## B-Rank ≤2 — doc-only
 
 - The live capability test needed three fixes of its own before it measured
