@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -241,7 +242,21 @@ func TestFullscreen_EscPeckingOrder_UploadArmBeatsZoomExit(t *testing.T) {
 		t.Fatalf("precondition: 'i' did not enter insert mode (mode = %v)", a.mode)
 	}
 	a.compose.SetUploading(true)
-	updateAndRender(t, a, keyCode(tea.KeyEscape))
+
+	// Not updateAndRender: this row needs the returned cmd. The upload
+	// arm toasts via uploadToastCmd, whose setter lives INSIDE a
+	// tea.Batch (app.go:4131), so the status bar stays empty until the
+	// batch's first member runs. firstBatchCmd runs exactly that member
+	// and skips the 2s tick.
+	_, cmd := a.Update(keyCode(tea.KeyEscape))
+	if cmd == nil {
+		t.Fatal("esc while uploading returned no cmd: the esc was consumed " +
+			"by something that does not toast -- zoom-exit claiming it " +
+			"before the insert upload arm is exactly the G1 defect " +
+			"fs-esc-pecking-order pins (protective arms outrank zoom-exit)")
+	}
+	firstBatchCmd(t, cmd)
+	_ = a.View()
 
 	if a.mode != ModeInsert {
 		t.Errorf("esc while uploading left mode = %v, want ModeInsert (the protective arm must consume esc before zoom-exit)", a.mode)
@@ -523,9 +538,28 @@ func TestFullscreen_TabWhileZoomedDoesNotFlipTheZoomedPane(t *testing.T) {
 }
 
 // fs-supp-set: the ONE suppression rule, key surface. While zoomed,
-// each key is suppressed with a visible toast (toastWithClear sets
-// the statusbar toast synchronously, so the text is observable
-// without executing the returned tick cmd).
+// each key is suppressed with a visible toast.
+//
+// HARNESS NOTE — the repo has TWO toast helpers with DIFFERENT cmd
+// contracts, and picking the wrong one breaks this test:
+//
+//	toastWithClear(a, text, d)   reducer_io.go:88   sets the toast
+//	                                                EAGERLY, returns a
+//	                                                bare clear tick.
+//	a.uploadToastCmd(text, dur)  app.go:4131        returns
+//	                                                tea.Batch(setter,
+//	                                                tick) -- the toast
+//	                                                is NOT applied until
+//	                                                the batch runs.
+//
+// The rows below read statusbarText straight after a.Update, so the
+// suppression path MUST use toastWithClear. If it uses uploadToastCmd
+// the toast is still sitting unapplied inside an unexecuted batch and
+// every row here fails with an empty-looking status bar. Do not "fix"
+// that by making uploadToastCmd eager: 14 production call sites and
+// firstBatchCmd depend on its batched shape (one of them builds it
+// INSIDE a tea.Batch at app.go:3586, where an eager setter fires before
+// the runtime ever executes the cmd).
 func TestFullscreen_SuppressedKeysToastWhileZoomed(t *testing.T) {
 	suppressed := []struct {
 		name string
@@ -625,7 +659,16 @@ func TestFullscreen_SuppressedWorkspaceNumberWhileZoomed(t *testing.T) {
 		),
 		withRender(),
 	)
+	// The switcher RECORDS instead of just answering: "was the switch
+	// scheduled" cannot be read off the returned cmd, because the
+	// suppression path returns a non-nil cmd of its own (the toast's
+	// clear tick). Asserting cmd == nil would make the row
+	// unsatisfiable -- it would demand both a toast and no cmd. The
+	// observable that actually separates suppressed from not-suppressed
+	// is whether the workspace service was ever invoked.
+	var switches []string
 	a.setWorkspaceSwitcherForTest(func(teamID string) tea.Msg {
+		switches = append(switches, teamID)
 		return WorkspaceSwitchedMsg{TeamID: teamID, TeamName: "beta", Channels: nil}
 	})
 	focusMessages(t, a)
@@ -633,8 +676,21 @@ func TestFullscreen_SuppressedWorkspaceNumberWhileZoomed(t *testing.T) {
 	_ = mustEnterZoom(t, a, frameBefore)
 
 	_, cmd := a.Update(keyPress('2'))
+	// Run the cmd the key produced: a workspace switch does its work
+	// inside the cmd, so the recorder only sees it once the cmd is
+	// executed. A suppressed key's cmd is just a toast tick, which
+	// records nothing. Bounded, because an unsuppressed switch may
+	// return a tick that would otherwise block the test goroutine.
 	if cmd != nil {
-		t.Error("'2' while zoomed scheduled a workspace switch (cmd != nil); 1-9 must be suppressed with a toast")
+		_, _ = cmdMsgWithin(t, cmd, time.Second)
+	}
+	_ = a.View()
+
+	if len(switches) != 0 {
+		t.Errorf("'2' while zoomed switched workspace (switcher called with %v); 1-9 must be suppressed with a toast", switches)
+	}
+	if a.activeTeamID != "T1" {
+		t.Errorf("active team = %q, want it unchanged at T1 while zoomed", a.activeTeamID)
 	}
 	if got := statusbarText(a); !strings.Contains(strings.ToLower(got), "zoom") {
 		t.Errorf("status bar = %q, want a suppression toast mentioning zoom", got)
