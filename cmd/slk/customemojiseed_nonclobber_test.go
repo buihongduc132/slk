@@ -37,7 +37,7 @@ func TestSeedCustomEmojiFromCache_MissKeepsBootstrapSubset(t *testing.T) {
 	db := newSeedTestDB(t)
 
 	// T_UNKNOWN has no cached rows: a MISS.
-	seedCustomEmojiFromCache(wctx, db, "T_UNKNOWN", &fakeEmojiLister{})
+	seedCustomEmojiFromCache(wctx, db, "T_UNKNOWN")
 
 	got := wctx.CustomEmoji()
 	if len(got) == 0 {
