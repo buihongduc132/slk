@@ -58,3 +58,152 @@
 ## Process notes
 - Plan items were NOT rewritten (append-only). Invalidated *mechanism clauses* are recorded as Open Threads + superseding items rather than flipping items to blocked, because each affected item's end-state survives with a corrected mechanism — deviation noted here.
 - Seam note: this plan lives in `flow/plans/` per the invoked cmd. The slk repo's own convention is `docs/superpowers/specs + plans` with tests-first (README workflow); implementation lanes should still follow the repo convention — carry this plan as the requirement source.
+
+---
+
+# Appendix B — findings from IMPLEMENTATION + LIVE verification
+
+> Added 2026-09-28 · append-only, originals above untouched
+> Source: two gated-dev lanes driven to green + live capability test against
+> workspace `dy-swarm` (T0934284S1J), 399 custom emoji
+> Merged head verified: `5cb4bfa` — both gates exit 0, 60 pkgs green under
+> `-race`, gofmt/vet clean, go.mod unchanged vs main
+> Evidence class: every item below was observed by the orchestrator's OWN
+> re-run, not reported by a delegate (gated-dev-start step 9)
+
+## B-Rank 5 — invalidates a mechanism as written
+
+- **B1 `TestFuzzy_OutOfOrderQueryMatchesNothing` was an UNSATISFIABLE oracle,
+  and never an F2P test.** The fixture `{rocket, bookmark_tabs, cricket}`
+  asserted nothing matches `krt`. But `krt` IS a genuine in-order subsequence
+  of `bookmark_tabs` — b-o-o-[k]-m-a-[r]-k-_-[t]-a-b-s, k@3 r@6 t@9. The row
+  therefore demanded that CORRECT in-order matching return nothing, which no
+  correct implementation can do. Lane-fuzzy burned two iterations on it and
+  began probing a `leadingSkip > 2` heuristic that would have rejected
+  legitimate matches whose first hit sits deeper than 2 runes in — i.e. it was
+  about to break the feature to satisfy a broken test.
+  - Fixed in `4112bf2`: `bookmark_tabs` → `roller_skate`. Verified rocket,
+    cricket and roller_skate all match `rkt`; none match `krt`.
+  - **Vacuity consequence (vacuity.md fifth case):** with the corrected
+    fixture the row passes against the BASE implementation, so it has zero
+    discriminating power. `internal/fuzzy`'s in-order matching was correct all
+    along. Lane-fuzzy's only real defect was the frecent-ranking row.
+  - Lesson: G11 warned the DOD's *examples* were unverified empirical claims.
+    The same applies to a test's *distractor set* — a negative fixture needs
+    its non-matches verified as rigorously as its matches.
+
+- **B2 Two toast helpers with different cmd contracts caused 6 of the 8
+  fullscreen failures AND a 10-minute package hang.** `toastWithClear`
+  (`reducer_io.go:88`) sets the toast EAGERLY and returns a bare clear tick;
+  `App.uploadToastCmd` (`app.go:4131`) returns `tea.Batch(setter, tick)` so the
+  toast is not applied until the batch runs. `reducer_zoom.go` called the
+  batched one while the suppression rows read `statusbarText` straight after
+  `a.Update`, so every row saw an empty status bar. The prior attempt "fixed"
+  this by making `uploadToastCmd` eager, which (a) broke 14 production call
+  sites — one at `app.go:3586` builds it INSIDE a `tea.Batch`, where an eager
+  setter fires before the runtime executes it — and (b) made `firstBatchCmd`
+  block on a bare `tea.Tick`, hanging `internal/ui` until its 10-minute
+  `-timeout` panic.
+  - This is precisely the "same value under two spellings" class `AGENTS.md`
+    names as the repo's worst recurring defect, at the level of a *contract*
+    rather than a constant. Resolution per that rule is DELETE one, never
+    alias — the two helpers should be one with an explicit eager/deferred
+    parameter. NOT done here (out of lane scope); recorded as Open Thread 5.
+
+## B-Rank 4 — significant
+
+- **B3 A shared test helper could hang its whole package instead of failing.**
+  `firstBatchCmd` called `cmd()` on the test goroutine and type-asserted
+  `tea.BatchMsg`. A non-batch cmd is almost always a bare `tea.Tick`, whose
+  closure blocks for the tick's duration, so a contract break surfaced as a
+  10-minute panic three packages away rather than as one failing row. Fixed by
+  running `cmd()` off-goroutine with a 1s bound (`0f41b68`). **Generalizable:
+  any test helper that invokes a `tea.Cmd` directly needs a timeout**, because
+  the cmd's shape is production's choice, not the helper's.
+
+- **B4 G11 CONFIRMED LIVE — and the DOD's example is unreachable in a real
+  workspace.** With 399 custom emoji, `:rkt` yields five
+  `cmd-pallet-*worktree*` rows and NO `rocket`. Mechanism: `worktree` contains
+  `rkt` as a CONTIGUOUS substring (w-o-[r-k-t]-r-e-e), so those names are
+  `TierSubstring(4)` while `rocket` is only `TierSubsequence(5)`. The plan's
+  own mandated order (`recent > prefix > substring > subsequence`) means tier 4
+  SHOULD win, and `MaxVisible=5` then evicts rocket. **The implementation is
+  correct; the DOD's `rkt→rocket` example is not satisfiable against this
+  corpus.** `fuzzy-rkt-verified` asked for the examples to be verified against
+  real `BuildEntries` output — that verification was done against the built-in
+  table only, not against a workspace's custom emoji, which is where it fails.
+  - The unit test passes only because its fixture holds 4 curated entries.
+  - Live-portable assertions used instead: `:rocke` (prefix tier, cannot be
+    evicted) reaches rocket, and every `:rkt` row is a genuine in-order match.
+
+- **B5 `messages.ClickAt` mis-counted the trailing spacer row — a PRE-EXISTING
+  production bug the zoom fixture surfaced.** It treated the blank spacer row
+  as part of the entry above it, so a click on dead space moved the
+  selected-message cursor. That is what made the fs-restore-eq fixture's cursor
+  land on 81 when it asked for 80 — the defect was in click hit-testing, not in
+  zoom restore. Fixed in `2dbb038` by reusing the same
+  `i < len(entries)-1 && msgIdx >= 0` guard `viewInternal` already applies when
+  trimming the spacer off `selectedEndLine`, so the two now agree. Affects
+  every click in the messages pane, zoomed or not.
+
+- **B6 A golden file had been blessed from the WRONG frame.**
+  `fullscreen_messages_zoomed.ansi` contained `"Thread from"`, contradicting
+  both its own filename and its test's inline assertion. A golden that is
+  wrong-but-stable is invisible: it passes forever and pins the wrong
+  behaviour. Re-blessed in `2dbb038` with the reason stated; the other two
+  goldens were untouched.
+
+## B-Rank 3 — moderate
+
+- **B7 agyralph's circuit breaker DISARMS a correct gate.** After 5 consecutive
+  failures it auto-disabled the registered gate check (observed:
+  `[check:645e1fee] CIRCUIT BREAKER: 5 consecutive failures -- auto-disabling`).
+  For a flaky check that is sensible; for a gated-dev gate it is backwards — a
+  valid gate is SUPPOSED to fail repeatedly until the work is done. Disarming
+  it is how a loop manufactures a false green. The bridge doc should state that
+  a gate check must be exempt from the breaker, or that the orchestrator must
+  re-enable it every round.
+
+- **B8 agyralph's conversation-DB harvest returns TRUNCATED step bodies, so the
+  loop does nothing.** Two independent attempts (flash + `--sub 1`, then
+  `--model pro --sub 0`): 14 iterations, zero commits, zero file changes. Main
+  responses were 11-char tool-call tokens (`call_277455`) or fragments cut
+  mid-word — `"$683929c6-6983-45de-a8` (a conversation id) and `his suggests
+  the "frecent" entry is likely not being added to allEmoji, and filter`
+  (missing its leading `T`). The agent was reasoning CORRECTLY; the harvest
+  never delivered a complete response, so nothing executed. This is L-B1 in the
+  bridge doc's own lessons list, reproduced. Both lanes were moved to
+  `ralph --agent claude-code`, which worked first time.
+
+- **B9 The post-merge gate re-run can silently measure the WRONG TREE.** In
+  `merge-and-verify.sh`, `git checkout` of the merged commit aborted
+  (`untracked working tree files would be overwritten: .ralph/...`) and the
+  script still ran the gates and printed `exit=0 (on merged 5975b4c)` — a
+  vacuous green in the one step designed to prevent vacuous greens. Fixed: the
+  checkout failure is now fatal, the worktree HEAD is compared to the merged
+  commit before the gate runs, and the gate's own printed `head=` is
+  cross-checked against the merge. Generalizable: **a verification step must
+  prove WHICH tree it measured**, not just report an exit code.
+
+- **B10 Loop bookkeeping reached a commit.** ralph's iteration-1 auto-commit
+  (`3a99b82`) captured four `.ralph/` files because the worktree's git exclude
+  was added after that loop had been relaunched. Untracked in `5cb4bfa`. The
+  stray-artifact sweep missed it because its pattern covered
+  `scratch|patch_|fix_|.orig|.rej` but not `.ralph/` — a denylist only catches
+  what it already knows.
+
+## B-Rank ≤2 — doc-only
+
+- The live capability test needed three fixes of its own before it measured
+  anything real: a connection predicate that hardcoded `▾ Channels`/`▾ DMs`
+  (invalid when `use_slack_sections` is on — this workspace renders `▾ Starred`,
+  `▾ Direct messages`, etc.), a `custom_emoji` check ordered BEFORE the run that
+  created the table (it reported "absent" while a later step reported 399 rows
+  from the same file), and a row scraper that matched `:name:` anywhere in the
+  frame, picking up shortcodes inside MESSAGE TEXT (`:wave:`, `:one:`, `:gear:`)
+  as if they were picker candidates. **A smoke test's own predicates need the
+  same scrutiny as the code under test** (V8/L-GS7, extended: assert you are
+  reading the right thing, not merely that something was read).
+- The compose emoji trigger requires `:` at column 0 or directly after
+  whitespace (`compose/model.go:1140-1148`). A stale compose buffer therefore
+  reads as "picker broken". Worth a line in the feature docs.
