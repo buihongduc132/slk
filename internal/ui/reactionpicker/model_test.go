@@ -238,15 +238,6 @@ func TestCustomEmojiOverridesBuiltin(t *testing.T) {
 	}
 }
 
-func stringContains(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
-
 // fakePickerFetcher is a test fake for emojiutil.PlaceFetcher. v1
 // duplicates the equivalent fakes in messages/render_test.go and
 // thread/model_test.go (rather than factoring into a shared testutil)
