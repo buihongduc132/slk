@@ -1688,3 +1688,46 @@ _(populated by gotcha-coverage + re-runs)_
     turning the assertion into a no-op. **Proven discriminating both ways:**
     removing the toast clause fails the row; rewording the toast to `"Nope"` fails
     it too, naming the missing string.
+
+
+52. **SA1019 is PERMANENTLY OPEN while the toast oracle stays pinned, and that is
+    the correct outcome rather than a blocker.** Lint's steady state is **1
+    finding**, down from 3. Recorded because the temptation to close it will recur
+    and the answer should not have to be re-derived.
+
+    **The fix exists and is verified.** `os.ReadDir` + `parser.ParseFile` per
+    entry, stdlib only, no new dependency — and I proved it still discriminates by
+    injecting a duplicate `toastWithClear` and watching the test fail. It is
+    recoverable from git history at `007611a` / `39a1b97`. Nothing needs
+    re-deriving when the pin is retired; the work is done and sitting in the log.
+
+    **Why it cannot be applied now.** The fix edits
+    `internal/ui/toast_consolidation_test.go`, which `gates/toast/oracle.sha256`
+    pins. I tested this case against the three criteria recorded in
+    `gates/xdg/PIN-CHANGED.md`, the one deliberate re-pin this effort allowed:
+
+    | criterion | xdg (allowed) | here |
+    |---|---|---|
+    | lane closed and merged | yes | **yes** (B34, `e779d03`) |
+    | fixes a false positive, does not weaken the assertion | yes | **yes** (proven discriminating) |
+    | **something is actually RED** | **yes** — `go test ./...` failed in the main checkout because the oracle counted nested worktree copies; a gate that was green everywhere it ran and red where the developer worked | **NO** — the test passes, the gate is GREEN, and SA1019 is a deprecation advisory about a function that works correctly |
+
+    The third criterion is the one that matters and it is the one this case fails.
+    The xdg re-pin was **forced by a gate that was lying**. Re-pinning here would
+    be for *convenience* — to turn a number from 1 to 0 — which is precisely the
+    conflict of interest OT17 exists to prevent: the party being measured must not
+    hold the ruler. That the fix is *good* does not change this, which is the same
+    lesson item 49 paid for.
+
+    **Recommendation, for after this effort lands rather than now.** The seven
+    gates are scaffolding for lanes that are all closed; their remaining function
+    is to keep the oracle files honest as ordinary repo tests. Retire them
+    deliberately as one step — all seven, with the pins — and then apply the
+    recovered SA1019 fix. Retiring the whole scaffold at a chosen moment is a
+    different act from eroding one pin because a lint number is inconvenient.
+
+    **The general shape worth keeping:** a pin outlives the lane it protected and
+    becomes a maintenance cost. That is the correct trade — it is what stopped an
+    agent reshaping its own spec three times in this effort — but the cost is real
+    and should be discharged by retiring the scaffold on purpose, never by
+    case-by-case exceptions each of which looks individually reasonable.
