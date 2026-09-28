@@ -150,6 +150,16 @@ type App struct {
 	zoomed                 bool
 	zoomSavedYOffset       int
 	zoomSavedSelectedIndex int
+	// zoomSavedMsgViewport records whether the two fields above hold a
+	// real snapshot of the MESSAGES pane -- that is, whether zoom
+	// promoted that pane. Recorded at enterZoom rather than recomputed
+	// at exitZoom because Tab while zoomed at a stacked width flips
+	// zoomFrontIsThread: measured at width 120, it goes true -> false ->
+	// true across successive Tabs, because Tab moves focus and
+	// threadInFront reads focus. Recomputing on the way out would
+	// restore onto whichever pane the answer had drifted to. See
+	// enterZoom (B49).
+	zoomSavedMsgViewport bool
 
 	// cmdline accumulates the text typed at the vi-style ':' prompt
 	// while in ModeCommand. Owned by mode_command.go; always "" in
