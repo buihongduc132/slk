@@ -143,29 +143,32 @@ func TestMatchNameRanks(t *testing.T) {
 		{"eng-widgets", "", rankPrefix},
 	}
 	for _, tt := range tests {
-		if got := matchName(tt.name, tt.query, squash(tt.query)); got != tt.want {
+		if got := matchName(tt.name, tt.query); got != tt.want {
 			t.Errorf("matchName(%q, %q) = %v, want %v", tt.name, tt.query, got, tt.want)
 		}
 	}
 }
 
-// TestSquashLeavesSeparatorlessStringsAlone guards the fast path.
-func TestSquashLeavesSeparatorlessStringsAlone(t *testing.T) {
-	if got := squash("alice"); got != "alice" {
-		t.Errorf("squash = %q, want alice", got)
-	}
-	if got := squash("a b-c_d.e"); got != "abcde" {
-		t.Errorf("squash = %q, want abcde", got)
-	}
-}
+// TestSquashLeavesSeparatorlessStringsAlone is deleted, not moved (B28). It
+// tested this package's local squash(), which is gone: squashing lives in
+// fuzzy.SquashedPrefix and is covered there by TestSquashedPrefix_{
+// MatchesWithSeparatorsRemoved, FoldsCase, NoMatch, EmptyQueryIsFalse} —
+// verified present before deleting this, not assumed. The first of those even
+// cites matchName's own doc example ("engwidgets" matches "eng-widgets"), so
+// the behaviour is pinned at the implementation rather than twice.
+//
+// The consumer-level assertion that matters here survives as the
+// {"eng-widgets", "engwidgets", rankSquashed} row in the table above: that is
+// what proves this package still *reaches* the squashed tier. A local unit test
+// of a local copy of the algorithm was the duplication, not the coverage.
 
 // TestMatchNameTrailingSeparator: a name ending in a separator must not
 // index past the end of the string.
 func TestMatchNameTrailingSeparator(t *testing.T) {
-	if got := matchName("team-", "x", "x"); got != rankNone {
+	if got := matchName("team-", "x"); got != rankNone {
 		t.Errorf("matchName = %v, want rankNone", got)
 	}
-	if got := matchName("team--lead", "lead", "lead"); got != rankWord {
+	if got := matchName("team--lead", "lead"); got != rankWord {
 		t.Errorf("matchName = %v, want rankWord", got)
 	}
 }

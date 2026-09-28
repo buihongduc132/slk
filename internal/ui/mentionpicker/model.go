@@ -152,17 +152,16 @@ func sortRanked(s []rankedUser) {
 
 func (m *Model) filter() {
 	q := text.Fold(m.query)
-	sq := squash(q)
 
 	var specials []User
 	var inCh, notInCh []rankedUser
 	for _, u := range specialMentions {
-		if rankUser(u, q, sq) != rankNone {
+		if rankUser(u, q) != rankNone {
 			specials = append(specials, u)
 		}
 	}
 	for _, u := range m.users {
-		r := rankUser(u, q, sq)
+		r := rankUser(u, q)
 		if r == rankNone {
 			continue
 		}
