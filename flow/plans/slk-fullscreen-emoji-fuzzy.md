@@ -5,7 +5,7 @@
 > Status: implemented (merged 5cb4bfa; both gates exit 0, 60 pkgs green under -race, live-verified against dy-swarm)
 > Branch: main (2b43b29) — implement lanes on fork branches, PR per lane
 > Location: flow/plans/slk-fullscreen-emoji-fuzzy.md
-> Items: 26 total (25 implemented, 1 partial [fuzzy-rkt-verified], 0 pending) — 11 original + 15 gotcha-appended (G1–G19 consolidated; see gotcha doc)
+> Items: 26 total (26 implemented, 0 partial, 0 pending) — 11 original + 15 gotcha-appended (G1–G19 consolidated; see gotcha doc). `fuzzy-rkt-verified` closed by OT37 (DOD example withdrawn as unsatisfiable-by-construction; no code change).
 
 ## Requirement (verbatim)
 
@@ -28,7 +28,7 @@ Source: user thread verbatim (parent + explore + follow-up). Engineering context
 Plan done when ALL below true:
 - [x] `z` toggles the front content pane (thread or messages) fullscreen — rail, sidebar and status row hidden; `esc` (and `z`) exit; prior pane state restored. Proven by golden frames + key-table tests in CI (`go test ./internal/ui -race`).
 - [x] Workspace custom emoji survive restart: cold start renders custom emoji from SQLite with zero network wait; `emoji.list` refresh updates the cache. Proven by `internal/cache` + `cmd/slk` tests using `fakeEmojiLister` (existing, `customemoji_test.go`).
-- [x] Emoji autocomplete finds emojis by substring and out-of-order subsequence, ranked (recent > prefix > substring > subsequence), accent/case-folded. Proven by emojipicker tests (`:thumbs` → `+1` reachable, `rkt` → `rocket`).
+- [x] Emoji autocomplete finds emojis by substring and out-of-order subsequence, ranked (recent > prefix > substring > subsequence), accent/case-folded. Proven by emojipicker tests (`:thumbs` → `+1` reachable; `:rocke` → `rocket`, a prefix-tier query that no substring match can evict). **The `rkt` → `rocket` example is withdrawn (OT6/OT37):** it is unreachable in any workspace holding ≥`MaxVisible` names that contain `rkt` contiguously (`w-o-`**`rkt`**`-r-e-e`), because those rank `TierSubstring(4)` against rocket's `TierSubsequence(5)`. That is this DOD's own mandated order working correctly, so the example — not the matcher — was wrong. Reachability is pinned by `internal/ui/emojipicker/rkt_corpus_eviction_test.go`, which asserts the eviction, and the ranking rule by `internal/fuzzy/rkt_tier_dominance_test.go`. [gotcha G11]
 - [x] All feature tests use existing harnesses only — `compareGolden`, `runKeyCases`, `newTestApp`/`newGoldenApp`, fakes in `services_helpers_test.go`/`customemoji_test.go`; `go vet ./...`, `gofmt -l .` empty, full `-race` suite green.
 
 ## Tasks
@@ -69,7 +69,7 @@ Plan done when ALL below true:
 - [x] emoji-upsert-txn: custom_emoji write is one team-scoped transaction (DELETE by team_id + INSERT) safe against the foreign_keys(ON) DSN (db.go:37 — no FK to workspaces, or workspace row upserted first); two-team replace test; emoji-before-workspace-row order tested. [gotcha G9]
 - [x] emoji-seed-order-test: cmd/slk wiring test asserts recorded call order = seed-from-cache → fetchWorkspaceEmoji, and the seed path never calls the lister (`callCount 0` at seed time). [gotcha G13]
 - [x] fuzzy-inorder-subseq: DOD/examples use "non-contiguous, IN-order subsequence" (matching `subsequenceScore` semantics); negative test `krt` does NOT match `rocket`. [gotcha G10]
-- [~] fuzzy-rkt-verified: `rkt→rocket` and `:thumbs→+1` verified against real `emoji.BuildEntries` output before being enshrined in tests; subsequence tier is score-aware (word-boundary/tightness, not plain alphabetical) so the examples win on merit; "recent" = matching entries ∩ frecent only (stale/global frecent names skipped — frecent_emoji has no team column); cap semantics defined (eviction documented or top prefix match guaranteed to survive). [gotcha G11]
+- [x] fuzzy-rkt-verified: ~~`rkt→rocket`~~ and `:thumbs→+1` verified against real `emoji.BuildEntries` output before being enshrined in tests; subsequence tier is score-aware (word-boundary/tightness, not plain alphabetical) so the examples win on merit; "recent" = matching entries ∩ frecent only (stale/global frecent names skipped — frecent_emoji has no team column); cap semantics defined (eviction documented or top prefix match guaranteed to survive). [gotcha G11] — **closed by OT37 via the DOD amendment above, not by a code change.** The `rkt→rocket` clause is withdrawn as unsatisfiable-by-construction; the cap semantics clause is satisfied by the "eviction documented" branch it already offered (`rkt_corpus_eviction_test.go`) plus the surviving-prefix-match branch (`:rocke`). The alternative the plan floated — a length/density penalty — was implemented and measured, and does NOT rescue the example: see OT37 for the numbers.
 - [x] fuzzy-reactionpicker-migration: reactionpicker + emojipicker expectation updates are behavior changes in their own commit (their tier set grows: prefix+substring → 4 tiers); "expectations unchanged" holds ONLY for channelfinder/mentionpicker; reactionpicker test coverage includes a subsequence query (`rkt→rocket` there too). [gotcha G12]
 - [x] emoji-cache-table: `internal/cache` persists custom emoji per workspace (table `custom_emoji(team_id, name, value, updated_at)`, pattern: `workspaces` in `cache/db.go`); upsert replaces the workspace's set on `emoji.list` success; read returns the full map; cache-miss → empty map, never an error surface to the UI.
 - [x] emoji-cache-wiring: startup seeds `BuildEntries` from the cache BEFORE network (`cmd/slk` connect path, replacing today's build-in-`app.go:829` with customs-from-cache), `fetchWorkspaceEmoji` upserts on success and re-publishes `CustomEmojisLoadedMsg`; existing bootstrap-subset/failure semantics preserved (`customemoji_test.go` assertions keep passing); `frecent_emoji` feeds a "recent" tier. Cache seeding stays OUT of `NewApp`/`newTestApp` (no golden perturbation). [gotcha G18]
@@ -842,3 +842,88 @@ _(populated by gotcha-coverage + re-runs)_
     `WorkspaceFinder` entry inflates the apparent suppression set (B54); and the
     suppression comment still argues for `toastWithClear`, which lane-toast
     deleted, directly above the `uploadToastCmd` call it now contradicts (B55).
+
+37. **OT6 closed: the `rkt→rocket` DOD example is WITHDRAWN (option (a)) — because
+    option (b) was implemented, measured, and cannot deliver it.** The plan
+    offered two exits: drop the example, or add a length/density penalty. The
+    second was built, run against a real-corpus-shaped fixture, and reverted. The
+    example is now withdrawn in the DOD (line 31) and `fuzzy-rkt-verified` is
+    `[x]` **by amendment, not by code** — `internal/fuzzy/fuzzy.go` is unchanged.
+
+    **Measured** (scratch probe, since deleted; `/usr/bin/go`, `-count=1`):
+
+    | candidate | `Match(name,"rkt")` | score | `SubsequenceScore` | density |
+    |---|---|---|---|---|
+    | `rocket` | `TierSubsequence`(5) | 80 | 80 | 3/6 = 0.500 |
+    | `worktree` | `TierSubstring`(4) | 0 | 80 | 3/8 = 0.375 |
+    | `cmd-pallet-worktree` | `TierSubstring`(4) | 0 | 80 | 3/19 = 0.158 |
+    | `ext-automote` vs `tomo` | `TierSubstring`(4) | 0 | — | 4/12 = 0.333 |
+
+    **The narrow option — penalise only within `TierSubsequence` — is a no-op,
+    exactly as OT6 suspected.** `worktree` is never *in* that tier. Both consumers
+    (`emojipicker/model.go:172-180`, `reactionpicker/model.go:296-318`) compare
+    `tier` first and reach `score` only when tiers are EQUAL *and* the tier is
+    `TierSubsequence`. Score is therefore unreachable across a tier boundary by
+    construction — which is precisely what the hash-pinned
+    `TestMatch_TierOrderingBeatsScore` codifies. Confirmed rather than assumed.
+
+    **The broad option fails on its own terms, three independent ways.**
+    Implemented as a density demotion out of `TierSubstring` at threshold 0.25:
+    - `cmd-pallet-worktree` (0.158) demotes to tier 5 — and then scores **80,
+      exactly TYING `rocket`'s 80**. The final tie-break is input order, which
+      `BuildEntries` sorts alphabetically, and `cmd-pallet-*` precedes `rocket`.
+      A picker-level probe with five customs confirmed the visible rows are
+      **unchanged**: all five `cmd-pallet-*worktree*`, no `rocket`. Demotion alone
+      changes nothing observable.
+    - bare `worktree` (0.375) stays tier 4 at any threshold that spares the pinned
+      oracle, so it outranks `rocket` on TIER regardless of any score change.
+    - the threshold is **trapped between two pinned facts**: the hash-pinned
+      `TestMatch_Substring` row (`ext-automote`/`tomo`, 0.333) sits BELOW bare
+      `worktree` (0.375). Any monotonic density rule that demotes `worktree` also
+      demotes `tomo` — so the fix cannot be expressed without editing a pinned
+      gate oracle, which is the stop-and-report signal, not a licence.
+
+    So (b) would need a demotion **and** a scoring change **and** a tie-break
+    change, applied to code four pickers share, to rescue one illustrative
+    example in a design doc — and it still collides with a pinned oracle. Not
+    worth it on cost alone; impossible as specified.
+
+    **The finding worth keeping is what the test suite did NOT say.** With the
+    density demotion applied, **all 60 packages stayed green** (`go build`,
+    `go test ./... -count=1`). A change that reranks the shared matcher for
+    `channelfinder`, `mentionpicker`, `emojipicker` and `reactionpicker`, and that
+    does not even achieve its goal, is invisible to the suite. "Green suite" was
+    never evidence here. That gap is now closed by two NEW unpinned files (no
+    pinned oracle edited, none needed):
+    - `internal/fuzzy/rkt_tier_dominance_test.go` — pins the tier split
+      (`rkt`/`worktree` = `TierSubstring`, `rkt`/`rocket` = `TierSubsequence`) and
+      the score TIE. Both assert what makes the example lose, not that it wins.
+      The score test pins only the EQUALITY, not the magnitude 80, per the pinned
+      oracle's own statement that the score is an internal signal.
+    - `internal/ui/emojipicker/rkt_corpus_eviction_test.go` — pins the eviction at
+      the picker level against a corpus shaped like the live workspace. The
+      pre-existing row for this example passes only because its fixture holds four
+      curated built-ins; that is a true statement about a 4-entry corpus, not
+      about a workspace.
+
+    **Proven by mutation, not by a red run** (all three are regression guards, so
+    they pass by construction):
+    - density demotion re-applied → tier test fails, `cmd-pallet-worktree` tier
+      `5, want 4`.
+    - density term added to `SubsequenceScore` → tie test fails, `rocket = 100,
+      worktree = 95`. Note the direction: the density term *does* favour rocket on
+      score, and rocket still loses. Necessary, not sufficient — the clearest
+      single piece of evidence that (b) is mechanically incapable.
+    - `MaxVisible` 5 → 6 → eviction test fails, `rocket` reappears.
+
+    `fuzzy.go` and `emojipicker/model.go` were restored byte-identical after each
+    (verified by `git diff --stat` empty).
+
+    **Unverified, and deliberately so:** this was not re-driven live against
+    `dy-swarm`. The corpus shape is reconstructed from the recording in G11/B4
+    (five `cmd-pallet-*worktree*` names, 399 customs), not freshly captured, and
+    the synthetic fixture uses five invented `cmd-pallet-worktree-*` names rather
+    than the real ones, which were never written down individually. The mechanism
+    those names exercise — `rkt` contiguous inside `worktree` — is exact; the
+    names are representative. The live half of the question was already closed
+    under B4 and needed no re-run.
