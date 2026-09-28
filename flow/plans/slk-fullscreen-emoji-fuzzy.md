@@ -49,10 +49,10 @@ the fakes in `services_helpers_test.go`. `git diff go.mod go.sum` stays clean.
 
 ## Verification
 
-At `9c05241`: seven lane gates GREEN from clean checkouts, each `head=`-matched
-with `dirty=0`; `go build`, `go vet`, `gofmt` (0 of 676), `golangci-lint` **0
-issues**, `go test ./... -race` (60 packages, 0 FAIL). `9c05241`→`ea55fe8` is
-markdown only, so that carries. All 14 hash pins verify.
+At `9c05241`: seven lane gates GREEN from clean checkouts, each `head=`-matched with
+`dirty=0`; `go build`, `go vet`, `gofmt` (0 of 676), `golangci-lint` **0 issues**,
+`go test ./... -race` (60 packages, 0 FAIL). Everything after it is markdown, so that
+carries. All 14 pins verify (see decision 7 for what they are).
 
 `slk-dev` deployed from `9c05241`, real credentials, own XDG roots. Both isolation
 controls hold (dev roots resolve a workspace, an empty root resolves nothing), live
@@ -61,13 +61,14 @@ state-dependent, 24 or 28, never 25. Three live probes green.
 
 Run gates only via `~/.local/state/slkfz/verify-commit.sh <commit>`: each `gate.sh`
 hardcodes its own lane worktree, so a bare run measures whatever that tree holds. It
-does **not** advance `~/.worktrees/slkfz-int`, which `deploy-slk-dev.sh` defaults
-to — check the source worktree's SHA first, or you ship a tree no gate measured.
+does **not** advance `~/.worktrees/slkfz-int`, which `deploy-slk-dev.sh` defaults to —
+check the source worktree's SHA first, or you ship a tree no gate measured. For what a
+deployed binary *is*, use `go version -m ~/.local/bin/slk-dev`, not `DEPLOYED-FROM`.
 
 ## What the bug hunt found
 
-56 catalogued items. B1–B55 are catalogued in the five appendices indexed below;
-B56 was found later and lives only in the working log (merged `976e55b`).
+56 catalogued items. B1–B55 sit in the five appendices indexed below; B56 was found
+later and lives only in the working log (merged `976e55b`).
 
 **There is no quotable coverage breakdown.** The audit's buckets sum to 70 against
 56 items — seven doc/behaviour splits, seven double-listed — and log item 60 says in
@@ -80,18 +81,17 @@ closed before the audit ran (B40; B49, `G` arm at `ab38b2a`), two not test gaps 
 premise was never established; B15 needs Phase 3's pane hooks). Three more closed
 after: B35 `5665841`, B2 `0d3d80f`, B34-registration `6d7740c`.
 
-**One live production defect in all of it.** `emoji.BuildEntries` sorted on raw
-bytes, so every uppercase ASCII letter sorted ahead of every lowercase one and a
-custom emoji named `:Rocket:` landed before `:apple:` instead of beside
-`:rocket:`. Now sorts on `text.Fold(Name)` with raw `Name` as tie-break. `internal/emoji`
-must import `internal/text` **aliased** — that package's own tests declare a
-package-level helper named `text`, so a bare import breaks the test binary.
+**One live production defect in all of it.** `emoji.BuildEntries` sorted on raw bytes,
+so every uppercase ASCII letter sorted ahead of every lowercase one and a custom
+`:Rocket:` landed before `:apple:` instead of beside `:rocket:`. Now sorts on
+`text.Fold(Name)`, raw `Name` as tie-break. `internal/emoji` must import
+`internal/text` **aliased** — that package's tests declare a helper named `text`.
 
 ## Appendices — retained in full, 1,717 lines
 
 Kept on instruction, not condensed. Each ranks findings 1–5 and ends in
-cross-references; per-item mechanism, `file:line` and reasoning live there and
-nowhere else, so **read the appendix, not this summary, before reopening an item.**
+cross-references; per-item mechanism and `file:line` live there and nowhere else, so
+**read the appendix, not this summary, before reopening an item.**
 
 | File | Scope | Items |
 |---|---|---|
@@ -101,12 +101,11 @@ nowhere else, so **read the appendix, not this summary, before reopening an item
 | `…-batch3.md` (412) | DOD criteria; carries a note on why it took four attempts | B32–B45 |
 | `…-batch4.md` (475) | zoom layout + suppression; consumers-of-the-zoom-flag survey | B46–B55 |
 
-Batches 3 and 4 each carry a **"Not reported (checked, held)"** section — the negative
-results, the cheapest thing here to re-derive wrongly.
+Batches 3 and 4 carry a **"Not reported (checked, held)"** section — the negative results. No `docs/superpowers/` spec exists for this effort (OT3); convention wants one.
 
-In the log (`git show ea55fe8:…`, 2,659 lines), the `## Open Threads` heading at
-line 91 *is* the 65 items, appended out of order (19–26 follow 37), 2 struck
-through. OT6/OT12/OT21/OT24/OT37 index into it and still resolve.
+In the log (`git show ea55fe8:…`, 2,659 lines) the `## Open Threads` heading at line 91
+*is* the 65 items, appended out of order (19–26 follow 37). OT6/OT12/OT21/OT24/OT37
+index into it and still resolve.
 
 ## Lessons worth keeping
 
@@ -122,11 +121,10 @@ asserting what undoes it. Vacuity shapes seen here: a test that recomputes the
 value it should observe; one that **authors its own subject**, composing the
 sequence itself so a production reordering stays green; a fixture so constrained
 only total absence can fail it; a probe placed where process-global state has
-already been restored; a verdict computed from an unset variable (zsh arrays are
-1-indexed, so `${PIPESTATUS[0]}` is empty and `[ "" -ne 0 ]` takes the else
-branch); and a passing probe that never compiled in — settle that with a panicking
-`init()`. When a comment asks humans to maintain an invariant, replace it with a
-check.
+already been restored; a verdict from an unset variable (zsh arrays are 1-indexed, so
+`${PIPESTATUS[0]}` is empty and `[ "" -ne 0 ]` takes the else branch); and a passing
+probe that never compiled in — settle that with a panicking `init()`. When a comment
+asks humans to maintain an invariant, replace it with a check.
 
 **Measurement.** Measure, do not reason, when the claim is about pixels: a
 published severity — "a full row of content is mouse-dead" — died on inspecting
@@ -137,23 +135,23 @@ backticked token per row. `gofmt -l .` is a plain file walker, unlike module-awa
 `go build ./...` — with agent worktrees in-tree it scanned 7,845 foreign files
 against the module's 676, so prune any directory carrying its own `go.mod`.
 
-**Citations rot, and a summary launders them.** `file:line` for the G15 contract
-(`app.go:931-945`) was wrong; it survived a handoff doc, an appendix, several
-commits, a cron prompt and my own repetition before anyone opened the file — the
-lines are bare comments. Same shape as quoting a coverage breakdown the source
-explicitly forbade quoting, and as "Open Threads 9-26", a range that described
-nothing. Each was true-sounding, inherited, and cheap to check. Re-read the source
-you are citing, not your summary of it — especially when the summary is your own.
+**Citations rot, and a summary launders them.** `app.go:931-945` for the G15 contract
+was wrong — bare comment lines — and survived a handoff doc, an appendix, commits, a
+cron prompt and my own repetition before anyone opened the file. Same shape: a
+coverage breakdown the source forbade quoting; "Open Threads 9-26", a range that
+described nothing; a `DEPLOYED-FROM` sidecar naming the wrong commit *and* sha256
+because the binary was rebuilt after it. Each was true-sounding, inherited, cheap to
+check. Prefer a record the artifact cannot drift from — `go version -m` over a
+sidecar — and re-read the source you cite, especially when the summary is your own.
 
 **Delegation.** A delegated report must name the commit it measured, and for an
 absence claim must name the grep that came back empty — two items were reported
 UNCOVERED while already closed in files the report cited by name.
-`Agent(isolation: "worktree")` branches from `origin/<default-branch>`, not local
-HEAD, which with unpushed work is silent staleness (117 commits of it); put the
-checkout in the prompt as step 0, because steering a running agent does not work.
-Before concluding an agent died, read its transcript — four completion
-notifications were lost in one session and every one of those agents had
-finished:
+`Agent(isolation: "worktree")` branches from `origin/<default-branch>`, not local HEAD,
+which with unpushed work is silent staleness (117 commits of it); put the checkout in
+the prompt as step 0, because steering a running agent does not work. Before concluding
+an agent died, read its transcript — four completion notifications were lost in one
+session and every one of those agents had finished:
 `jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' <tasks-dir>/<id>.output`.
 Take facts from delegates; re-derive severity yourself.
 
@@ -196,4 +194,6 @@ None of these is blocked on work.
 6. **agyralph B12/B7.** A circuit breaker disarms a correct gate. Patch is a
    scratch copy at `~/.local/state/slkfz/agyralph-patched/`; applying it to your
    `open-ralph-wiggum` repo is your call.
-7. **Gate retirement.** Seven lane gates and 14 hash pins are still armed.
+7. **Gate retirement.** Seven lanes (`digits fold fuzzy sep toast xdg zoom`) and 14
+   pins armed, all verifying: 10 test-file oracles + 4 `gate.sh` self-pins (`fuzzy
+   sep toast zoom` only). Inventory `~/.local/state/slkfz/gates/*/`.
