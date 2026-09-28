@@ -372,17 +372,15 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 
 	default:
 		// Number keys 1-9 switch workspaces.
-		if km, ok := msg.(tea.KeyMsg); ok {
-			if idx, ok := a.workspaceSwitchIndex(km); ok {
-				if a.workspaceSvc != nil && a.workspaceItems[idx].ID != a.workspaceRail.SelectedID() {
-					switcher := a.workspaceSvc
-					teamID := a.workspaceItems[idx].ID
-					return func() tea.Msg {
-						return switcher.Switch(teamID)
-					}
+		if idx, ok := a.workspaceSwitchIndex(msg); ok {
+			if a.workspaceSvc != nil && a.workspaceItems[idx].ID != a.workspaceRail.SelectedID() {
+				switcher := a.workspaceSvc
+				teamID := a.workspaceItems[idx].ID
+				return func() tea.Msg {
+					return switcher.Switch(teamID)
 				}
-				return nil
 			}
+			return nil
 		}
 	}
 	return nil
