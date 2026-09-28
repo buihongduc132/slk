@@ -58,10 +58,18 @@ import (
 // be confused with the zoom toggle.
 const threadsInsertToken = "badger"
 
-// threadsNoComposeToast is the exact text `i` raises in ViewThreads when no
-// compose box is drawn. Kept as a constant so a production reword fails this
-// test loudly instead of turning the toast assertion into a silent no-op.
-const threadsNoComposeToast = "No message box in Threads view"
+// threadsNoComposeToast is the exact text `i` raises in the state this file's
+// defect row reaches: a thread IS open (Enter was pressed) but zoom at a
+// side-by-side width promoted messages, so the reply box is drawn on no frame.
+// The remedy is therefore "exit zoom", not "open a thread" -- the two
+// conditions have different remedies and separate strings.
+//
+// Deliberately a literal copy rather than a reference to the production
+// constant: if this referenced the same symbol, a production reword would
+// change both sides at once and the assertion would keep passing while
+// asserting nothing. Verified by rewording production to "Nope" and watching
+// this row fail.
+const threadsNoComposeToast = "Zoom hides the reply box — press z or Esc"
 
 func threadsViewSummaries() []cache.ThreadSummary {
 	return []cache.ThreadSummary{

@@ -36,6 +36,46 @@ import (
 	"github.com/gammons/slk/internal/ui/themeswitcher"
 )
 
+// The two reasons a reply box is out of reach in the Threads view, and the
+// remedy for each. They are separate strings because they have DIFFERENT
+// remedies, and naming the wrong one is worse than naming none.
+//
+// The threads list has no compose box of its own, by design: the 2026-04-28
+// threads-view spec says "the bottom compose box is hidden in this view.
+// Replies are sent via the existing thread panel's compose (focus moves to it
+// on Enter from the list)", and calls that panel "the only entry point". So a
+// key that wants a compose box here is not hitting a gap in the design -- it
+// is off the route the design specifies, and the toast's job is to name the
+// way back onto it.
+//
+// Measured, the two reachable conditions and nothing else:
+//
+//	!threadVisible               no thread is open, so there is no reply box
+//	                             anywhere yet.  Reached by `i` or `E` straight
+//	                             from the list, zoomed or not, at any width.
+//	threadVisible, not focusable zoom promoted a pane that is not the thread,
+//	                             so the box exists but is drawn on no frame.
+//	                             Reached only at a side-by-side width after
+//	                             Enter, because zoom then promotes messages.
+//
+// Both exits from zoom restore the route: `z` again and Esc each hand focus
+// back to the thread, after which typing lands in threadCompose and renders.
+const (
+	threadsNoThreadOpenToast   = "No thread open — press Enter to open one"
+	threadsZoomHidesReplyToast = "Zoom hides the reply box — press z or Esc"
+)
+
+// threadsNoReplyBoxToast names why no reply box is reachable right now, and
+// what to do about it. Callers have already established that the view is
+// ViewThreads and that no drawn compose is available.
+func (a *App) threadsNoReplyBoxToast() tea.Cmd {
+	msg := threadsZoomHidesReplyToast
+	if !a.threadVisible {
+		msg = threadsNoThreadOpenToast
+	}
+	return a.uploadToastCmd(msg, 2*time.Second, toastEager)
+}
+
 func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	// ctrl+w pending sub-state: the next key is a window command
 	// (intercepted FIRST, like the reaction-nav sub-states below).
@@ -102,7 +142,7 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 			return a.threadCompose.Focus()
 		}
 		if a.view == ViewThreads {
-			return a.uploadToastCmd("No message box in Threads view", 2*time.Second, toastEager)
+			return a.threadsNoReplyBoxToast()
 		}
 		a.SetMode(ModeInsert)
 		a.focusedPanel = PanelMessages
@@ -335,7 +375,7 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 
 	case key.Matches(msg, a.keys.Edit):
 		if a.view == ViewThreads && a.focusedPanel != PanelThread {
-			return a.uploadToastCmd("No message box in Threads view", 2*time.Second, toastEager)
+			return a.threadsNoReplyBoxToast()
 		}
 		return a.beginEditOfSelected()
 
