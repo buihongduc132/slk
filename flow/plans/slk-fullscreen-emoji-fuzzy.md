@@ -398,6 +398,41 @@ _(populated by gotcha-coverage + re-runs)_
       `mentionpicker`, the fix is a per-call-site separator set, not re-splitting
       the predicate.
 
+29. **B41 is closed (`73c1c76`, lane `slkfz/lane-xdg`) — one rule now, and the
+    credential hazard it exposed is RELOCATED, NOT REMOVED.** `XDG_DATA_HOME` is
+    resolved in exactly one place, the new `internal/xdg.DataDir() (string,
+    error)`; `cmd/slk/xdgData()` and `internal/export.ExportDir()` both delegate.
+    A third package was unavoidable because `internal/export` cannot import
+    `cmd/slk`, which is why the rule was re-derived in the first place.
+    - **The mandated class is satisfied properly**: both original
+      `os.Getenv("XDG_DATA_HOME")` reads are *deleted*, not aliased. The gate
+      counts env-read sites from the shell independently of the oracle's own repo
+      walk, so a merely delegating second site would still fail it.
+    - **What batch 3 recorded understated this, and what the fix leaves behind is
+      a different shape of the same risk.** The pre-fix defect was not "exports
+      aren't where my data is": `xdgData()` swallowed the `os.UserHomeDir` error
+      and returned the *relative* `.local/share/slk`, and since it has no error
+      channel at all, its 11 call sites consumed that unchecked — four of them as
+      `filepath.Join(xdgData(), "tokens")`. With `HOME` unset, slk wrote
+      **credentials into its working directory**.
+    - **Post-fix `xdgData()` returns `""` on failure, and measured,
+      `filepath.Join("", "tokens") == "tokens"`.** The token path is therefore
+      still relative — `./tokens` instead of `./.local/share/slk/tokens`. The
+      write still lands in the CWD, and arguably more exposed: a bare filename is
+      likelier to collide with a real file, or be committed by accident, than a
+      hidden nested path. **B41 fixed the duplicate rule. It did not fix the
+      credential location.**
+    - This is not the lane overstepping or falling short. Hardening the 11 call
+      sites was explicitly scoped OUT of its prompt as a different defect —
+      callers cannot express failure — with a different blast radius, and the lane
+      both respected that and said so in its own commit comment. It is recorded
+      here as a **new, separate, open item** rather than as a loose end of B41.
+    - **Open**: give `xdgData()` a way to fail, or make the four token call sites
+      refuse an empty data dir. Either is a `cmd/slk` change across 11 call sites
+      and wants its own lane. `TestXDG_DataAndExportAgreeWhenHomeIsUnset` already
+      pins the invariant such a fix must not break, so that lane inherits a guard
+      instead of starting from nothing.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
