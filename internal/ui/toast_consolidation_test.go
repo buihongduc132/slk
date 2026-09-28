@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -49,25 +49,31 @@ var toastHelperNames = []string{"toastWithClear", "uploadToastCmd"}
 // second spelling, which is what "never alias" forbids.
 func TestToast_OnlyOneHelperImplementationSurvives(t *testing.T) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("parsing internal/ui: %v", err)
+		t.Fatalf("reading internal/ui directory: %v", err)
 	}
 
 	found := map[string]string{} // name -> position
-	for _, pkg := range pkgs {
-		for path, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Name == nil {
-					continue
-				}
-				for _, want := range toastHelperNames {
-					if fn.Name.Name == want {
-						found[want] = path + ":" + fset.Position(fn.Pos()).String()
-					}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		path := entry.Name()
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", path, err)
+		}
+
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name == nil {
+				continue
+			}
+			for _, want := range toastHelperNames {
+				if fn.Name.Name == want {
+					found[want] = path + ":" + fset.Position(fn.Pos()).String()
 				}
 			}
 		}
