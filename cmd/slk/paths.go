@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/gammons/slk/internal/xdg"
 )
 
 func xdgConfig() string {
@@ -14,11 +16,14 @@ func xdgConfig() string {
 }
 
 func xdgData() string {
-	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return filepath.Join(dir, "slk")
+	dir, err := xdg.DataDir()
+	if err != nil {
+		// Deliberately swallowing the error for now, as existing call sites
+		// do not expect one. This will leave callers joining onto an empty
+		// string if resolution fails.
+		return ""
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "slk")
+	return dir
 }
 
 func xdgCache() string {

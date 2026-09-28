@@ -5,12 +5,12 @@ package export
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	emojiutil "github.com/gammons/slk/internal/emoji"
 	"github.com/gammons/slk/internal/ui/messages"
+	"github.com/gammons/slk/internal/xdg"
 )
 
 // ThreadToMarkdown converts a parent message and its replies into a
@@ -68,12 +68,9 @@ func formatMessage(msg messages.MessageItem, userNames, channelNames map[string]
 // ExportDir returns the default directory for saved exports,
 // honoring XDG_DATA_HOME. Creates nothing — callers must MkdirAll.
 func ExportDir() (string, error) {
-	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return filepath.Join(dir, "slk", "exports"), nil
-	}
-	home, err := os.UserHomeDir()
+	dir, err := xdg.DataDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".local", "share", "slk", "exports"), nil
+	return filepath.Join(dir, "exports"), nil
 }
