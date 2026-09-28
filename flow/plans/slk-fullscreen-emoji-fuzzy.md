@@ -1323,3 +1323,146 @@ _(populated by gotcha-coverage + re-runs)_
     `cache.db`, up 1d15h), one minute before the check — not the deploy, whose
     documented checkpoint-on-close caveat only ever touched `cache.db`'s
     mtime.
+
+
+45. **The `golangci-lint` gate has now RUN, for the first time in this entire
+    effort (merged as `b0f7811`).** AGENTS.md has required it at v2.13.1
+    throughout; it had never executed once. My earlier report that it was "not
+    on PATH" was simply WRONG — the binary was in `~/go/bin` the whole time.
+
+    **Two version blockers, both real, neither the one I named.** The installed
+    binary is **v1.64.8** against a `version: "2"` config, which v1 cannot
+    parse; and it was built with **go1.25** while the repo targets **1.26.1**,
+    so it refuses before reading the config at all. v2.13.1 built with go1.26.8
+    now lives at `~/.local/state/slkfz/bin/golangci-lint`, called by absolute
+    path. The user's own `~/go/bin` copy is untouched (58306760 bytes, mtime
+    Apr 18); no PATH or dotfile was changed. `.golangci.yml` is UNCHANGED —
+    weakening the oracle to satisfy the code is the failure mode this work
+    exists to fight.
+
+    **Three findings on `main`, verified by my own run, not the lane's.**
+    `reactionpicker/model_test.go:241` `stringContains` unused;
+    `mode_normal.go:356` S1040 type assertion to the same type;
+    `toast_consolidation_test.go:52` SA1019 `go/parser.ParseDir` deprecated.
+    Only the first is fixed — a dead 9-line test helper, mechanical and
+    behaviour-preserving. The two staticcheck items touch live code and are
+    category (b), report-not-fix. On the merged head the count is exactly 2,
+    with S1040 having drifted to line 375 because the other lane's comment
+    block sits above it — same finding, not a new one.
+
+    **A TWO-SIDED TOOLCHAIN TRAP, recorded because I fell into both halves.**
+    Running the linter with the default PATH lets the mise Go 1.26.6 in, whose
+    vendored `x/text/unicode/bidi` is corrupted, and the gate reports ONE bogus
+    `typecheck` finding about `net/http` instead of the real three — a false
+    green-ish result that looks like a different problem entirely. Forcing
+    `GOTOOLCHAIN=local` then fails the opposite way: `/usr/bin/go` is a
+    **1.22.2** binary that AUTO-SWITCHES to 1.26.1 for this module, so pinning
+    `local` blocks the switch and the run dies on "go.mod requires go >=
+    1.26.1". The invocation that works is
+    `env PATH=/usr/bin:/bin golangci-lint run` — force the PATH, allow the
+    switch. Note also that `golangci-lint ... | head` exits 0 through the pipe,
+    so a hard config error reads as success; that is how I first mis-scored it.
+
+
+46. **B56: the Threads-view insert clause now respects drawn-ness (merged as
+    `976e55b`) — and the fix is much larger than the one keystroke it was
+    reported as.** `mode_normal.go`'s insert arm OR'd three clauses; the second,
+    `a.view == ViewThreads && a.threadVisible`, consulted neither focus nor
+    drawn-ness, so it fired while zoom had promoted a pane that is not the
+    thread, overriding `normalizeZoomFocus` one keystroke after it had repaired
+    exactly that state. One-line tightening to `a.threadFocusable()` —
+    `1faa1fb`'s own predicate, not a fourth notion of drawn-ness.
+
+    **Verified by me, not taken on report.** Reverting the clause in a fresh
+    worktree turns the new test RED on precisely the zoomed-side-by-side row,
+    with three passing controls. With the revert applied AND the new test file
+    moved aside, the whole package still passes — `ok internal/ui 11.192s` — so
+    nothing in the repo caught it. I also measured the safety argument rather
+    than accepting it: `threadFocusable()` implies `threadVisible` across all 12
+    configurations (3 widths × zoomed × thread-open), so unzoomed the clause
+    reduces to what it was and nothing changes.
+
+    **The real severity: eight sites, not one keystroke.** `reducer_zoom.go`
+    enumerates eight production sites routing on `focusedPanel == PanelThread`
+    — reaction picker and reaction-nav, three insert send/upload arms, two paste
+    arms, the external editor. Clause 2 re-armed every one of them at an undrawn
+    pane immediately after the normaliser had cleared it.
+
+    **A CORRECTION TO WHAT I PUBLISHED IN ITEM 43 AND TOLD THE USER.** I
+    described this as zoom hiding the typed text, and offered three candidate
+    behaviours for `i` as though zoom had created the problem. Measured: in
+    ViewThreads **no compose box is drawn at all, zoomed or unzoomed**. Seeding
+    either compose and rendering gives `chan-compose-in-frame=false
+    thread-compose-in-frame=false` in BOTH states, and `renderThreadsViewPanel`
+    has neither a typing row nor a compose box by construction
+    (`view_messages.go:9` says so outright). So post-fix the row reads
+    `focus=2 compose="badger" threadCompose="" inFrame=false`.
+
+    Two facts I had conflated: **misrouting to an undrawn pane** (fixed here,
+    and it was re-arming eight sites) and **ViewThreads having no compose box**
+    (pre-existing, unrelated to zoom, still open). The product question stands
+    but it is not the one I posed in item 43 — it is not "what should `i` do
+    when zoomed", it is "should the threads list have a compose box at all".
+    Item 43's three candidates were framed on a false premise; this supersedes
+    that framing. The new test asserts only what is determined.
+
+
+47. **The `time.Local` race is REAL, I retract my "unreproduced" report, and
+    the mechanism is not the one that was diagnosed.** A lane hit
+    `TestNewGoldenApp_RenderIsTimezoneIndependent` failing under `-race` and
+    diagnosed it as an abandoned goroutine reaching `log.Printf`. I had earlier
+    reported the same race as UNREPRODUCED after running it in isolation, at
+    package level twice, and repo-wide. Both accounts were wrong in different
+    ways.
+
+    **My retraction, and why my method could not have worked.** Measured, 44
+    `-race` builds at `976e55b`:
+
+    | phase | what ran | raced |
+    |---|---|---|
+    | A | the golden test ALONE ×20 | **0/20** |
+    | B | the 59 tests in the abandoning files + the golden test ×20 | **5/20** |
+    | C | the whole package ×6 (the CI shape) | **1/6** |
+
+    Phase A is the point: **in isolation it can never fire**, because the
+    counterparty is a goroutine leaked by an EARLIER test. My "I ran it in
+    isolation and saw nothing" was not bad luck, it was the one configuration
+    guaranteed to show nothing. An isolation run is not evidence about a race
+    whose counterparty is cross-test.
+
+    **The corrected mechanism, from six captured stacks that agree exactly.**
+    Every one: write at `golden_test.go:1142` (the test assigning the
+    process-global `time.Local` in a loop), previous read at **`time.Now()` via
+    `time.sendTime()`** — the runtime's timer-delivery goroutine. NOT
+    `log.Printf`; `log` appears in none of the six. `time.sendTime` backs
+    `time.After` / `time.Tick` / `time.NewTimer`, and it calls `time.Now()`,
+    which reads `time.Local`. So **any pending timer anywhere in the process is
+    a concurrent reader of `time.Local`**, and `tea.Tick` creates exactly those.
+
+    That makes the invariant in `golden_test.go:1122-1123` — "safe here because
+    this package's tests never run in parallel and nothing else reads
+    `time.Local` concurrently" — false BY CONSTRUCTION rather than by accident.
+    Its first half holds (zero `t.Parallel()` in the package). Its second half
+    cannot hold while any timer is outstanding, and the abandoned goroutines in
+    `cmdMsgWithin` / `drainSkippingTimers` matter only because they keep timers
+    alive past the test that created them. Fixing the abandonment alone would
+    narrow the window without closing it; the durable fix is to stop mutating
+    the process-global `time.Local` in-process.
+
+    **A caveat on the rates, not on the finding.** Phases B and C overlapped
+    with another lane's own `-race` runs on the same 8-core box (two concurrent
+    `ui.test` processes observed), so 5/20 and 1/6 are rates under load and are
+    not comparable to an idle machine. They are lower bounds on flakiness, not
+    calibrated probabilities. The finding itself does not depend on them: a race
+    the detector reports is a real race at any load, and phase A's **0/20** is
+    if anything strengthened by contention — under load the isolated
+    configuration still never fired, which is what makes it the control rather
+    than a small sample.
+
+    **Not fixed here, and deliberately so.** It is pre-existing, it is a
+    test-infrastructure change in files other lanes were editing, and a refactor
+    commit that also changes behaviour cannot be reviewed. Recorded as its own
+    item with the stacks kept at `~/.local/state/slkfz/racehunt/` and the hunt
+    script at `~/.local/state/slkfz/hunt-timelocal-race.sh`. **It is a real CI
+    flake**: AGENTS.md names `go test ./... -race` as what CI runs, and that is
+    phase C.
