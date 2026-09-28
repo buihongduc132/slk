@@ -169,6 +169,9 @@ greppable by name; no line numbers, because these files move.
 | Open the thread on the selected message, or open it and hand focus back to the channel pane | `openThread(t, a)`, `openThreadThenFocusMessages(t, a)` (`internal/ui/window_bounds_zoom_test.go`) — both drive real keys through the reducer chain, unlike `focusThreadPanel`, which assigns `threadVisible` directly |
 | Assert zoom is on with MESSAGES as the promoted pane | `assertZoomedPaneIsMessages(t, a, why)` (`internal/ui/zoom_front_pane_test.go`) |
 | The measured widths either side of the side-by-side layout branch | `stackedWidth` (120), `sideBySideWidth` (200), `firstSideBySideWidth` (162 — 161 stacks) (same file). With the shared fixture's 6-col rail and 30-col sidebar; re-measure if either changes |
+| The same branch with the sidebar HIDDEN | `firstSideBySideWidthNoSidebar` (130 — 129 stacks), `sidebarDecidesWidth` (150) (`internal/ui/zoom_sidebar_hidden_tab_test.go`). The sidebar's 30+2 cols are an **input** to that branch, so `firstSideBySideWidth` does not carry over: 130–161 is a band where hiding the sidebar alone flips the layout from stacked to side-by-side, and with it which pane zoom promotes |
+| Hide the sidebar through the real `ctrl+b` path, asserting it went | `hideSidebar(t, a)` (same file). Only valid **unzoomed** — `ctrl+b` is in `zoomSuppresses`, so while zoomed it raises the toast and the sidebar stays put |
+| Every sidebar-hidden zoomed configuration, with the one pane its Tab ring must hold | `sidebarHiddenRings()` + `zoomedSidebarHiddenApp(t, tc)` (same file) |
 
 The `stripANSI` / `entriesFor` / `filteredNames` / `containsName` rows are the
 registration B34 found missing: all eight helpers
