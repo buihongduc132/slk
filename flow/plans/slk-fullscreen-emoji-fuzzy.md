@@ -2444,3 +2444,105 @@ _(populated by gotcha-coverage + re-runs)_
       constructing an empty-`Unicode` frecent entry. Genuinely uncovered,
       different item, not folded in (AGENTS.md: found while looking, raised
       separately).
+
+63. **The other two tractable items: B29 was a live production defect, B51 an
+    uncovered seam. Both re-verified here, and verifying B29 cost a fix I had to
+    re-apply twice.**
+
+    - **B29: real, fixed (`feb2d00`).** `BuildEntries` ended with
+      `out[i].Name < out[j].Name` — a raw byte comparison, so every uppercase
+      ASCII letter sorted ahead of every lowercase one and `:Rocket:` landed
+      before `:apple:` instead of beside `:rocket:`. Custom emoji names are
+      user-supplied; this was reachable in production, worst on the workspaces
+      with the most customs. Now `text.Fold(Name)` with raw `Name` as tie-break.
+
+      **Not `SliceStable`, and the reason generalises.** `out` is filled by
+      ranging over a map, so "input order" is *already* randomised — stability
+      with respect to it would still be nondeterministic run to run. `Name` is a
+      map key, hence unique, so `(Fold, Name)` is a strict total order and the
+      output is reproducible by construction. Reaching for `SliceStable` to fix a
+      tie is only sound when the input order is itself defined.
+
+      **A trap worth knowing before importing anything into `internal/emoji`:**
+      that package's own tests declare package-level helpers named `text` and
+      `emoji` (`tokens_test.go:9,12`). A bare `internal/text` import compiles the
+      *library* and breaks the *test binary*. Imported aliased as `slktext`,
+      following the established `slkemoji` precedent.
+
+      **Four control legs, and the third is the one that made the fix safe to
+      take:** (A) sort reverted to raw bytes → `internal/emoji` RED (3 tests),
+      `emojipicker` **GREEN** — which is what shows the two new test files are not
+      duplicates; (B) picker step 4 broken → `emojipicker` RED (3 tests); (C) the
+      **pre-existing** `TestBuildEntries_AlphabeticalOrder`, which asserts
+      *raw-byte* sortedness, still GREEN after the fix. C is not a formality: it
+      passes because all 1,972 built-in names are lowercase pure ASCII, where
+      `Fold` is the identity. That is the evidence the defect was only ever
+      reachable through custom emoji, and that the fix disturbs nothing else.
+
+      The comment half was discharged too: `emojipicker/model.go`'s "the picker
+      preserves that order" now points at `order_preserved_test.go`, which feeds a
+      deliberately scrambled slice so its assertions hold independently of what
+      `BuildEntries` produces.
+
+    - **B51: confirmed uncovered, closed (`eaab873`).** Zoom's entire vertical
+      effect is `statusRows()` (0 zoomed, 1 otherwise), flowing
+      `statusRows → frame.ContentHeight → bounds.H → rect.H →` the model's render
+      height `→ bottom` in `absoluteWindowSixelPlacements`. Two relationships
+      asserted against `reclaimed`, read back from the **unzoomed** leg so the
+      expectation cannot drift with the bug: a pure row translation of the
+      bottom-anchored pane's trailing image, and a fitting threshold `reclaimed`
+      rows lower when zoomed — both **searched** over [24,40] rather than written
+      down, with a monotonicity guard.
+
+      **Two fixture measurements, either of which would have produced a passing
+      vacuous test.** (1) **Overflow is essential**: with
+      `setupTwoWindowSixelImages`'s single image message the pane does not
+      overflow, the viewport sits at offset 0, and the placement lands on the
+      *identical* row zoomed and unzoomed — no observable at all. (2) The existing
+      `TestCollectSixelPlacements_TwoWindows…` renders models at `rect.H`, but
+      production renders at `rect.H-2` (`view_window_region.go:118`); at the real
+      height the model's own visibility gate is exactly as tight as the `bottom`
+      clip, so that clip is defence-in-depth and unreachable through a real model.
+      Hence driving `View()` rather than hand-building a rect.
+
+      **The measurement that settles "uncovered":** the mutation fails 7
+      pre-existing tests — expected, `statusRows` feeds the whole zoomed layout —
+      and **none of them is a sixel or image test**. Layout, golden and hit-test
+      only. So the zoom-to-placement seam had no coverage, rather than this being
+      a second layer over something already pinned. A control that stops at "the
+      package went red" cannot make that distinction, which is why these controls
+      print the failing names and classify them.
+
+    **Two restore-to-HEAD wipes in one stretch, and the lesson is about the
+    harness, not about care.** `b29-control.sh`'s trap restored with
+    `git checkout --`, i.e. to **HEAD** — and the whole purpose of a pre-commit
+    control is to run while the fix is *uncommitted*, so HEAD is exactly the wrong
+    baseline. It silently deleted the verified `entries.go` fix after the legs had
+    passed. Minutes later I repeated the same shape by hand, ending an inline
+    command with `git checkout -- AGENTS.md` and losing three freshly-written
+    table rows.
+
+    The first wipe produced an accidental fifth confirmation — the two new test
+    files went RED in a clean tree with no mutation involved — but that is luck,
+    not method. Controls now **save and restore the bytes they started with**.
+    The other three controls (`b5`, `b34`, `b49`) abort when their target is
+    already dirty, which makes restore-to-HEAD correct *there*; `b29` was the one
+    that deliberately mutated a dirty file and had no such guard. **A control's
+    restore target must be the state it observed, never a ref.**
+
+    And one more false verdict from my own harness, making five today:
+    `b51-control.sh`'s `restore` ran once mid-run and again from the EXIT trap,
+    and the first call `rm -rf`'d its own save dir — so the trap printed
+    `RESTORE FAILED` and exited **2 after a completely successful run**. Fixed by
+    splitting `cleanup` from `restore` and making restore idempotent; re-run end
+    to end gives rc=0 and the same verdict. **An EXIT trap that also runs inline
+    must be idempotent, or it will invent a failure at the end of a success.**
+
+    **Scoreboard for the audit's eight UNCOVERED, all verified individually:**
+    B5 real and closed (`e8c61da`), B29 real and closed (`feb2d00`), B51 real and
+    closed (`eaab873`), B31 **refuted** (unobservable, no test written),
+    B40-timing-half and B49-content-half **stale** (closed before the audit ran;
+    the `G` arm of B49 was the one genuine residue, closed at `ab38b2a`), B50 and
+    B15 **not test gaps** (unestablished premise; missing seam). Plus all three
+    ALREADY-FIXED-NO-GUARD items closed earlier: B35 `5665841`, B2 `0d3d80f`,
+    B34-registration `6d7740c`.
