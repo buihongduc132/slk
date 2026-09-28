@@ -1278,3 +1278,48 @@ _(populated by gotcha-coverage + re-runs)_
     exist. `withView(ViewThreads)` is required alongside it. Any future
     Threads-view repro in this package must assert `a.view` before asserting
     anything else.
+
+
+44. **The item 43 fix is confirmed LIVE against the real workspace, and
+    `capability-test.sh` is proven blind to the defect it was supposed to
+    cover.** New standalone probe, `~/.local/state/slkfz/probe-zoom-focus.sh`,
+    kept separate exactly as `probe-zoom-autoclear.sh` was.
+
+    **The control is the point.** Both edges probed on a binary built from
+    `05b754d` (the merge immediately before the fix): **exit 1, both FAIL**.
+    The same probe on the deployed `495e7ca` binary: **exit 0, both PASS**. A
+    green probe with no red control would have proved deployment and nothing
+    else, which is the V8/L-GS7 trap `capability-test.sh`'s own header warns
+    about.
+
+    **This also confirms item 42's correction against a real binary, not a
+    scratch test.** `05b754d` ALREADY CONTAINS `5b1ff62`, the
+    `threadDrawnAlone` fix — and the keystroke still vanishes on it, in both
+    edges. So that lane demonstrably did not fix the symptom. The scratch
+    measurement and the live binary now agree.
+
+    **The blindness, stated precisely, because the number is true and still
+    means nothing.** `capability-test.sh` reported **25 passed, 0 failed** both
+    before and after `1faa1fb`. No check in it ever TYPES while zoomed, so its
+    count is a correct tally of checks that pass and carries zero information
+    about whether typing while zoomed works. This is a sixth instance of the
+    vacuity shape catalogued in this document — a correct count mistaken for
+    evidence about behaviour — and the second time this particular suite has
+    hit it (B13 was the first; see its `4b-ii` comment). The suite was left
+    unmodified rather than extended, so its 25/25 stays a stable baseline and
+    the new behaviour lives in a probe with its own control.
+
+    **Safety, since this typed into a real workspace with real credentials.**
+    `Enter` is never sent while in insert mode; it appears only in normal mode
+    to open a thread, which posts nothing. Verified after the run: the
+    sentinels occur in exactly the two `*-typed` frames and in no other frame,
+    and never on a row carrying an author/timestamp prefix — i.e. nothing was
+    ever rendered as a posted message. Both sentinels were backspaced out.
+
+    **Live install verified unchanged, not merely asserted.** `integrity_check`
+    `ok` and `messages=11113` on BOTH the live cache and the dev copy, read
+    through `mode=ro` handles. The recent mtimes on `cache.db-wal` / `-shm`
+    are the two live `slk` processes still running (13 open fds on
+    `cache.db`, up 1d15h), one minute before the check — not the deploy, whose
+    documented checkpoint-on-close caveat only ever touched `cache.db`'s
+    mtime.
