@@ -69,7 +69,6 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 
 	switch {
 	case key.Matches(msg, a.keys.InsertMode):
-		a.SetMode(ModeInsert)
 		// In the Threads view there is no main compose box -- the
 		// only way to type is into the right-side thread panel's
 		// compose. Force focus there even when the threads list
@@ -98,9 +97,14 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		// zoomFrontIsThread), and the focus clause is kept unreachable in
 		// the bad state by the normaliser plus FocusNext/FocusPrev.
 		if a.focusedPanel == PanelThread || (a.view == ViewThreads && a.threadFocusable()) || a.threadDrawnAlone() {
+			a.SetMode(ModeInsert)
 			a.focusedPanel = PanelThread
 			return a.threadCompose.Focus()
 		}
+		if a.view == ViewThreads {
+			return a.uploadToastCmd("No message box in Threads view", 2*time.Second, toastEager)
+		}
+		a.SetMode(ModeInsert)
 		a.focusedPanel = PanelMessages
 		return a.compose.Focus()
 
@@ -330,6 +334,9 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		return a.beginForwardOfSelected()
 
 	case key.Matches(msg, a.keys.Edit):
+		if a.view == ViewThreads && a.focusedPanel != PanelThread {
+			return a.uploadToastCmd("No message box in Threads view", 2*time.Second, toastEager)
+		}
 		return a.beginEditOfSelected()
 
 	case key.Matches(msg, a.keys.Delete):
