@@ -32,7 +32,6 @@
 package ui
 
 import (
-	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -123,6 +122,17 @@ func (a *App) invalidateZoomCaches() {
 	a.lastScreenValid = false
 }
 
+func (a *App) workspaceSwitchIndex(msg tea.KeyMsg) (int, bool) {
+	s := msg.String()
+	if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+		idx := int(s[0] - '1')
+		if idx < len(a.workspaceItems) {
+			return idx, true
+		}
+	}
+	return -1, false
+}
+
 // zoomSuppresses reports whether msg is a key the suppression rule
 // swallows while zoomed (fs-supp-set). Two surfaces: the layout /
 // navigation keys, and the workspace numbers 1-9 (bare and alt+N).
@@ -141,12 +151,11 @@ func (a *App) zoomSuppresses(msg tea.KeyMsg) bool {
 	) {
 		return true
 	}
-	// Workspace numbers: bare 1-9 and alt+1-9 both switch workspace.
-	s := msg.String()
-	if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+	// Workspace numbers: bare 1-9 switch workspace.
+	if _, ok := a.workspaceSwitchIndex(msg); ok {
 		return true
 	}
-	return strings.HasPrefix(s, "alt+") && len(s) == 5 && s[4] >= '1' && s[4] <= '9'
+	return false
 }
 
 var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
