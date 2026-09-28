@@ -34,7 +34,17 @@ func TestResolveEditor_EditorBeatsConfigWhenVisualUnset(t *testing.T) {
 }
 
 func TestResolveEditor_FallsBackToConfigWhenNeitherEnvVarSet(t *testing.T) {
+	// t.Setenv registers a restore-to-original cleanup at call time, so
+	// it must run before the bare os.Unsetenv below — that Unsetenv is
+	// not itself undone, but the t.Setenv cleanup it primes still fires
+	// on test end and puts VISUAL/EDITOR back the way they were. Without
+	// it, os.Unsetenv leaks the unset state into every later test in
+	// this binary. The test genuinely needs the vars UNSET (not just
+	// empty), so the os.Unsetenv calls stay; do not "simplify" this back
+	// into a leak.
+	t.Setenv("VISUAL", "")
 	os.Unsetenv("VISUAL")
+	t.Setenv("EDITOR", "")
 	os.Unsetenv("EDITOR")
 
 	parts, ok := ResolveEditor("myconfigeditor --wait")
@@ -48,7 +58,12 @@ func TestResolveEditor_FallsBackToConfigWhenNeitherEnvVarSet(t *testing.T) {
 }
 
 func TestResolveEditor_NoneConfiguredReturnsNotOk(t *testing.T) {
+	// See the comment in TestResolveEditor_FallsBackToConfigWhenNeitherEnvVarSet:
+	// the t.Setenv calls exist purely to arm a restore-on-cleanup for the
+	// os.Unsetenv that follows, which itself has no restore of its own.
+	t.Setenv("VISUAL", "")
 	os.Unsetenv("VISUAL")
+	t.Setenv("EDITOR", "")
 	os.Unsetenv("EDITOR")
 
 	if parts, ok := ResolveEditor(""); ok {
