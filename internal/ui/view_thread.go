@@ -40,7 +40,7 @@ func (a *App) renderThreadRegion(frame panelLayoutFrame, themeVer int64) string 
 	// SetFocused bumps via dirty()).
 	a.threadPanel.SetFocused(threadFocused)
 	threadComposeFocused := a.mode == ModeInsert && a.focusedPanel == PanelThread
-	threadLayoutKey := themeVer<<2 | boolToInt(threadFocused)<<1 | boolToInt(threadComposeFocused)
+	threadLayoutKey := themeVer<<3 | boolToInt(a.zoomed)<<2 | boolToInt(threadFocused)<<1 | boolToInt(threadComposeFocused)
 	a.threadCompose.SetWidth(threadWidth - 2)
 
 	threadComposeView := a.threadCompose.View(threadWidth-2, threadComposeFocused)

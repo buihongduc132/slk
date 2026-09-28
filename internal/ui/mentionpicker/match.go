@@ -1,9 +1,7 @@
 package mentionpicker
 
 import (
-	"strings"
-
-	"github.com/gammons/slk/internal/text"
+	"github.com/gammons/slk/internal/fuzzy"
 )
 
 // matchRank describes how well a candidate name matches the query.
@@ -21,50 +19,30 @@ const (
 	rankNone                      // no match
 )
 
-// isSeparator reports whether b separates words in a display name or
-// handle. Slack handles allow "-", "_" and "."; display names add
-// spaces. All are ASCII, so byte-level tests are safe on UTF-8 input —
-// no continuation byte of a multi-byte rune can collide with them.
-func isSeparator(b byte) bool {
-	return b == ' ' || b == '-' || b == '_' || b == '.'
-}
-
-// squash removes every separator from s, so "eng-widgets" and
-// "engwidgets" compare equal.
-func squash(s string) string {
-	if !strings.ContainsAny(s, " -_.") {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for i := 0; i < len(s); i++ {
-		if !isSeparator(s[i]) {
-			b.WriteByte(s[i])
-		}
-	}
-	return b.String()
-}
-
-// matchName ranks name against an already-folded query. squashedQuery is
-// the query with separators removed; the caller computes it once per
-// keystroke rather than per candidate.
-func matchName(name, query, squashedQuery string) matchRank {
+// matchName ranks name against an already-folded query.
+//
+// B28: this used to take a third parameter, squashedQuery, with the comment
+// "squashedQuery is ignored now" — dead since the shared-matcher migration
+// moved squashing inside fuzzy.SquashedPrefix. The parameter was still computed
+// per filter() call by a local squash(), which was still backed by a local
+// isSeparator(), and all three were still tested. Deleting the parameter
+// deletes both helpers with it, and with them one of the four competing
+// definitions of "word separator" that B27 catalogues: this one treated
+// ' ' '-' '_' '.' as separators, where fuzzy.isSeparator also counts '/' and
+// ':'. Squashing behaviour now has exactly one implementation, inside
+// internal/fuzzy, covered by that package's TestSquashedPrefix_* tests.
+func matchName(name, query string) matchRank {
 	if query == "" {
 		return rankPrefix
 	}
-	n := text.Fold(name)
-	if strings.HasPrefix(n, query) {
+	tier, _, ok := fuzzy.Match(name, query)
+	if ok && tier == fuzzy.TierPrefix {
 		return rankPrefix
 	}
-	// Word-boundary prefix: "widg" matches "eng-widgets". Runs of
-	// separators are handled naturally — each one starts a new word, and
-	// an empty word can only match an empty query, which returned above.
-	for i := 0; i < len(n); i++ {
-		if isSeparator(n[i]) && strings.HasPrefix(n[i+1:], query) {
-			return rankWord
-		}
+	if fuzzy.WordPrefix(name, query) {
+		return rankWord
 	}
-	if squashedQuery != "" && strings.HasPrefix(squash(n), squashedQuery) {
+	if fuzzy.SquashedPrefix(name, query) {
 		return rankSquashed
 	}
 	return rankNone
@@ -72,9 +50,9 @@ func matchName(name, query, squashedQuery string) matchRank {
 
 // rankUser returns the better of the user's display-name and username
 // ranks.
-func rankUser(u User, query, squashedQuery string) matchRank {
-	r := matchName(u.DisplayName, query, squashedQuery)
-	if ru := matchName(u.Username, query, squashedQuery); ru < r {
+func rankUser(u User, query string) matchRank {
+	r := matchName(u.DisplayName, query)
+	if ru := matchName(u.Username, query); ru < r {
 		r = ru
 	}
 	return r

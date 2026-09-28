@@ -117,7 +117,7 @@ func TestFetchWorkspaceEmoji_RunsEvenWhenBootstrapPublishedASubset(t *testing.T)
 	}}
 	sender := &captureEmojiSender{}
 
-	fetchWorkspaceEmoji(context.Background(), wctx, api, sender, "T1")
+	fetchWorkspaceEmojiIntoCache(context.Background(), wctx, api, sender, "T1", nil)
 
 	if got := api.callCount(); got != 1 {
 		t.Fatalf("ListCustomEmoji calls = %d, want 1 — a non-empty bootstrap subset must NOT suppress emoji.list", got)
@@ -136,7 +136,7 @@ func TestFetchWorkspaceEmoji_ErrorKeepsBootstrapSubset(t *testing.T) {
 	api := &fakeEmojiLister{err: errors.New("ratelimited")}
 	sender := &captureEmojiSender{}
 
-	fetchWorkspaceEmoji(context.Background(), wctx, api, sender, "T1")
+	fetchWorkspaceEmojiIntoCache(context.Background(), wctx, api, sender, "T1", nil)
 
 	if got := wctx.CustomEmoji()["from-boot"]; got != "https://example.test/boot.png" {
 		t.Errorf("CustomEmoji()[from-boot] = %q, want the bootstrap entry preserved on error", got)
@@ -153,7 +153,7 @@ func TestFetchWorkspaceEmoji_SendsLoadedMsgForItsTeam(t *testing.T) {
 	api := &fakeEmojiLister{result: map[string]string{"party-parrot": "https://example.test/parrot.gif"}}
 	sender := &captureEmojiSender{}
 
-	fetchWorkspaceEmoji(context.Background(), wctx, api, sender, "T_OTHER")
+	fetchWorkspaceEmojiIntoCache(context.Background(), wctx, api, sender, "T_OTHER", nil)
 
 	msgs := sender.snapshot()
 	if len(msgs) != 1 {
@@ -176,7 +176,7 @@ func TestFetchWorkspaceEmoji_SendsLoadedMsgForItsTeam(t *testing.T) {
 func TestFetchWorkspaceEmoji_NilSenderDoesNotPanic(t *testing.T) {
 	wctx := &WorkspaceContext{}
 	api := &fakeEmojiLister{result: map[string]string{"a": "b"}}
-	fetchWorkspaceEmoji(context.Background(), wctx, api, nil, "T1")
+	fetchWorkspaceEmojiIntoCache(context.Background(), wctx, api, nil, "T1", nil)
 	if wctx.CustomEmoji()["a"] != "b" {
 		t.Error("CustomEmoji() should still be published with a nil sender")
 	}

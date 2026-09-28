@@ -43,7 +43,7 @@ import (
 
 func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	if (a.compose.Uploading() || a.threadCompose.Uploading()) && key.Matches(msg, a.keys.Escape) {
-		return a.uploadToastCmd("Upload in progress", 2*time.Second)
+		return a.uploadToastCmd("Upload in progress", 2*time.Second, toastDeferred)
 	}
 	if a.editing.IsActive() && key.Matches(msg, a.keys.Escape) {
 		// If a picker is active in the relevant compose, close it
@@ -79,6 +79,16 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if key.Matches(msg, a.keys.Escape) {
+		// Zoom-exit outranks picker-close and insert-exit
+		// (fs-esc-pecking-order): one esc leaves zoom and nothing else,
+		// so insert mode and any open compose picker survive it. The
+		// protective arms above (upload, edit-cancel) already claimed
+		// their esc, so they outrank zoom-exit as the peel order
+		// requires.
+		if a.zoomed {
+			a.exitZoom()
+			return nil
+		}
 		// If a picker is active, close it instead of exiting insert mode.
 		if a.focusedPanel == PanelThread && a.threadVisible {
 			if a.threadCompose.IsEmojiActive() {

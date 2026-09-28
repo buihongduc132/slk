@@ -8,9 +8,11 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/gammons/slk/internal/emoji"
+	"github.com/gammons/slk/internal/fuzzy"
 	imgpkg "github.com/gammons/slk/internal/image"
 	"github.com/gammons/slk/internal/text"
 	"github.com/gammons/slk/internal/ui/styles"
+	"sort"
 )
 
 // MaxVisible caps how many emoji rows are shown in the picker.
@@ -134,14 +136,53 @@ func (m *Model) SelectedEntry() (emoji.EmojiEntry, bool) {
 // (emoji.BuildEntries already does); the picker preserves that order.
 func (m *Model) filter() {
 	q := text.Fold(m.query)
-	var results []emoji.EmojiEntry
-	for _, e := range m.entries {
-		if q == "" || strings.HasPrefix(text.Fold(e.Name), q) {
+
+	if q == "" {
+		var results []emoji.EmojiEntry
+		for _, e := range m.entries {
 			results = append(results, e)
 			if len(results) >= MaxVisible {
 				break
 			}
 		}
+		m.filtered = results
+		if m.selected >= len(m.filtered) {
+			m.selected = 0
+			if len(m.filtered) > 0 {
+				m.selected = len(m.filtered) - 1
+			}
+		}
+		return
+	}
+
+	type match struct {
+		entry emoji.EmojiEntry
+		tier  fuzzy.Tier
+		score int
+		idx   int // To preserve stable input order if tiers tie
+	}
+	var matches []match
+	for i, e := range m.entries {
+		tier, score, ok := fuzzy.Match(e.Name, q)
+		if ok {
+			matches = append(matches, match{entry: e, tier: tier, score: score, idx: i})
+		}
+	}
+
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].tier != matches[j].tier {
+			return matches[i].tier < matches[j].tier
+		}
+		if matches[i].tier == fuzzy.TierSubsequence && matches[i].score != matches[j].score {
+			return matches[i].score > matches[j].score // Higher score is better
+		}
+		// Preserve input order (which is alphabetical)
+		return matches[i].idx < matches[j].idx
+	})
+
+	var results []emoji.EmojiEntry
+	for i := 0; i < len(matches) && i < MaxVisible; i++ {
+		results = append(results, matches[i].entry)
 	}
 	m.filtered = results
 	if m.selected >= len(m.filtered) {

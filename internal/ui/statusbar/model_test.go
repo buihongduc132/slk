@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // testMode is a simple fmt.Stringer for testing without importing ui (avoids circular import).
@@ -350,22 +351,21 @@ func TestViewIsExactlyWidthColumns(t *testing.T) {
 }
 
 // stripANSI removes ANSI escape sequences for substring assertions.
+//
+// Delegates to the same library call internal/ui's own stripANSI uses
+// (golden_test.go:131). This was a hand-rolled byte loop that ended an escape at
+// the first ASCII letter, which is correct for SGR and wrong for OSC. B34 logged
+// the two copies as duplication; measuring them showed they were not equivalent:
+//
+//	input  "\x1b]8;;https://example.com/a\x07label\x1b]8;;\x07"
+//	was    "ttps://example.com/a\alabel"   <- leaks the URL, and eats the 'h'
+//	                                          of https because 'h' is a letter
+//	now    "label"
+//
+// Latent rather than active: statusbar emits no hyperlinks today, so no current
+// assertion was reading corrupted text. But 17 call sites use this helper, and the
+// failure mode -- a URL silently spliced into the string an assertion matches
+// against -- is the kind that gets diagnosed as a rendering bug.
 func stripANSI(s string) string {
-	var b strings.Builder
-	inEsc := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == 0x1b {
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
-				inEsc = false
-			}
-			continue
-		}
-		b.WriteByte(c)
-	}
-	return b.String()
+	return ansi.Strip(s)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gammons/slk/internal/core"
 	slkemoji "github.com/gammons/slk/internal/emoji"
+	"github.com/gammons/slk/internal/fuzzy"
 	imgpkg "github.com/gammons/slk/internal/image"
 )
 
@@ -50,7 +51,8 @@ func TestFilterByQuery(t *testing.T) {
 		t.Error("expected filtered results for 'rock'")
 	}
 	for _, e := range m.filtered {
-		if !stringContains(e.Name, "rock") {
+		_, _, ok := fuzzy.Match(e.Name, "rock")
+		if !ok {
 			t.Errorf("filtered entry %s doesn't match query 'rock'", e.Name)
 		}
 	}

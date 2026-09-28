@@ -82,14 +82,6 @@ func copiedClearAfter(d time.Duration) tea.Cmd {
 // 1 are dramatic.
 const emojiInvalidateDebounce = 100 * time.Millisecond
 
-// toastWithClear pushes text into the status bar's toast slot and
-// schedules the clear after `d`. Used by the fixed-text and
-// formatted-reason toasts below.
-func toastWithClear(a *App, text string, d time.Duration) tea.Cmd {
-	a.statusbar.SetToast(text)
-	return copiedClearAfter(d)
-}
-
 var reduceIO reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 	switch m := msg.(type) {
 	case tea.PasteMsg:
@@ -106,48 +98,48 @@ var reduceIO reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 
 	case statusbar.PermalinkCopiedMsg:
 		_ = m
-		return toastWithClear(a, "Copied permalink", 2*time.Second), true
+		return a.uploadToastCmd("Copied permalink", 2*time.Second, toastEager), true
 
 	case statusbar.PermalinkCopyFailedMsg:
 		_ = m
-		return toastWithClear(a, "Failed to copy link", 2*time.Second), true
+		return a.uploadToastCmd("Failed to copy link", 2*time.Second, toastEager), true
 
 	case statusbar.MarkedUnreadMsg:
 		_ = m
-		return toastWithClear(a, "Marked unread", 2*time.Second), true
+		return a.uploadToastCmd("Marked unread", 2*time.Second, toastEager), true
 
 	case statusbar.MarkUnreadFailedMsg:
-		return toastWithClear(a, "Mark unread failed: "+truncateReason(m.Reason, 40), 3*time.Second), true
+		return a.uploadToastCmd("Mark unread failed: "+truncateReason(m.Reason, 40), 3*time.Second, toastEager), true
 
 	case statusbar.ThreadSavedMsg:
-		return toastWithClear(a, "Saved "+filepath.Base(m.Path), 2*time.Second), true
+		return a.uploadToastCmd("Saved "+filepath.Base(m.Path), 2*time.Second, toastEager), true
 
 	case statusbar.ThreadSaveFailedMsg:
-		return toastWithClear(a, "Save failed: "+truncateReason(m.Reason, 40), 3*time.Second), true
+		return a.uploadToastCmd("Save failed: "+truncateReason(m.Reason, 40), 3*time.Second, toastEager), true
 
 	case statusbar.EditFailedMsg:
-		return toastWithClear(a, "Edit failed: "+truncateReason(m.Reason, 40), 3*time.Second), true
+		return a.uploadToastCmd("Edit failed: "+truncateReason(m.Reason, 40), 3*time.Second, toastEager), true
 
 	case editEmptyToastMsg:
 		_ = m
-		return toastWithClear(a, "Edit must have text (use D to delete)", 3*time.Second), true
+		return a.uploadToastCmd("Edit must have text (use D to delete)", 3*time.Second, toastEager), true
 
 	case statusbar.DeleteFailedMsg:
-		return toastWithClear(a, "Delete failed: "+truncateReason(m.Reason, 40), 3*time.Second), true
+		return a.uploadToastCmd("Delete failed: "+truncateReason(m.Reason, 40), 3*time.Second, toastEager), true
 
 	case statusbar.SendFailedMsg:
-		return toastWithClear(a, "Send failed: "+truncateReason(m.Reason, 40), 3*time.Second), true
+		return a.uploadToastCmd("Send failed: "+truncateReason(m.Reason, 40), 3*time.Second, toastEager), true
 
 	case statusbar.EditNotOwnMsg:
 		_ = m
-		return toastWithClear(a, "Can only edit your own messages", 2*time.Second), true
+		return a.uploadToastCmd("Can only edit your own messages", 2*time.Second, toastEager), true
 
 	case statusbar.DeleteNotOwnMsg:
 		_ = m
-		return toastWithClear(a, "Can only delete your own messages", 2*time.Second), true
+		return a.uploadToastCmd("Can only delete your own messages", 2*time.Second, toastEager), true
 
 	case ToastMsg:
-		return toastWithClear(a, m.Text, 3*time.Second), true
+		return a.uploadToastCmd(m.Text, 3*time.Second, toastEager), true
 
 	case UploadProgressMsg:
 		a.statusbar.SetToast(fmt.Sprintf("Uploading %d/%d…", m.Done, m.Total))
@@ -161,15 +153,16 @@ var reduceIO reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 		a.threadCompose.SetUploading(false)
 		if m.Err != nil {
 			return a.uploadToastCmd(
-				"Upload failed: "+truncateReason(m.Err.Error(), 40),
-				3*time.Second,
-			), true
+					"Upload failed: "+truncateReason(m.Err.Error(), 40),
+					3*time.Second, toastDeferred),
+
+				true
 		}
 		a.compose.ClearAttachments()
 		a.threadCompose.ClearAttachments()
 		a.compose.Reset()
 		a.threadCompose.Reset()
-		return a.uploadToastCmd("Sent", 2*time.Second), true
+		return a.uploadToastCmd("Sent", 2*time.Second, toastDeferred), true
 
 	case ConnectionStateMsg:
 		a.statusbar.SetConnectionState(statusbar.ConnectionState(m.State))

@@ -2544,6 +2544,13 @@ func convertSixelMap(in map[int]imgrender.SixelEntry) map[int]sixelEntry {
 // matched the hit), false when the click missed -- callers use the bool to
 // distinguish "clicked a message" from "clicked empty space" so that
 // click-to-open-thread doesn't fire on chrome / dead-space clicks.
+//
+// The blank trailing spacer row that every non-final message entry
+// carries is dead space, not a message row: a click on it misses. Its
+// row belongs to e.height (the entry owns it for layout purposes), so
+// the hit range excludes it explicitly — same `i < len(entries)-1 &&
+// msgIdx >= 0` guard viewInternal uses when it trims the spacer off
+// selectedEndLine.
 func (m *Model) ClickAt(y int) bool {
 	contentY := y - m.chromeHeight
 	if contentY < 0 {
@@ -2553,13 +2560,17 @@ func (m *Model) ClickAt(y int) bool {
 
 	// Walk through cached view entries to find which message is at this line
 	currentLine := 0
-	for _, entry := range m.cache {
+	for i, entry := range m.cache {
 		if entry.msgIdx < 0 {
 			// Date separator or "new messages" line — skip
 			currentLine += entry.height
 			continue
 		}
-		if absoluteY >= currentLine && absoluteY < currentLine+entry.height {
+		hitEnd := currentLine + entry.height
+		if i < len(m.cache)-1 {
+			hitEnd-- // trailing spacer row is dead space
+		}
+		if absoluteY >= currentLine && absoluteY < hitEnd {
 			if m.selected != entry.msgIdx {
 				m.selected = entry.msgIdx
 				m.dirty()
@@ -3706,4 +3717,9 @@ func RemoveUserID(ids []string, userID string) []string {
 		}
 	}
 	return out
+}
+
+func (m *Model) SetViewport(yOffset, selectedIndex int) {
+	m.yOffset = yOffset
+	m.selected = selectedIndex
 }

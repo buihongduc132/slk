@@ -196,6 +196,14 @@ func (db *DB) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_channel_members_channel
 		ON channel_members(workspace_id, channel_id);
+
+	CREATE TABLE IF NOT EXISTS custom_emoji (
+		team_id    TEXT NOT NULL,
+		name       TEXT NOT NULL,
+		value      TEXT NOT NULL,
+		updated_at INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (team_id, name)
+	);
 	`
 
 	if _, err := db.conn.Exec(schema); err != nil {

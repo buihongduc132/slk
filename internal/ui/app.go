@@ -142,11 +142,14 @@ type App struct {
 	threadVisible  bool
 	// stackFront is the content pane (PanelMessages or PanelThread)
 	// that last had focus. Recorded by Update, read by threadInFront.
-	stackFront Panel
-	view       View
-	width      int
-	height     int
-	keys       KeyMap
+	stackFront             Panel
+	view                   View
+	width                  int
+	height                 int
+	keys                   KeyMap
+	zoomed                 bool
+	zoomSavedYOffset       int
+	zoomSavedSelectedIndex int
 
 	// cmdline accumulates the text typed at the vi-style ':' prompt
 	// while in ModeCommand. Owned by mode_command.go; always "" in
@@ -907,13 +910,50 @@ func (a *App) threadInFront() bool {
 // — even while focus is elsewhere, such as the sidebar — consult this
 // instead of threadVisible alone.
 func (a *App) threadDrawnAlone() bool {
+	return a.threadDrawnAloneAt(a.zoomed)
+}
+
+// threadDrawnAloneAt is threadDrawnAlone's parameterised form: it asks
+// the question against a hypothetical zoom state rather than the
+// current one. Split out because zoomFrontIsThread has to probe the
+// UNZOOMED layout, and calling threadDrawnAlone from there while
+// a.zoomed is already true would be self-referential.
+func (a *App) threadDrawnAloneAt(zoomed bool) bool {
 	if !a.threadVisible {
 		return false
 	}
 	var scratch panelLayout
 	frame := scratch.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront())
+		a.sidebarVisible, a.threadVisible, a.threadInFront(), zoomed)
 	return frame.MsgWidth == 0
+}
+
+// zoomFrontIsThread reports whether zoom should promote the THREAD pane
+// rather than the messages pane.
+//
+// "Front" here means what threadInFront's doc says it means: the pane
+// the layout draws when it is too narrow for both. So zoom promotes the
+// thread exactly when the UNZOOMED layout would have stacked and left
+// the messages pane undrawn. When both panes fit side by side there is
+// no pane in front of the other, and zoom promotes the messages pane.
+//
+// Probing the unzoomed layout (rather than reading focusedPanel) is
+// also what keeps Tab from flipping WHICH pane is zoomed (G15): Tab
+// moves focus, but at a width where both panes fit, the branch that
+// decides the widths does not consult focus at all.
+func (a *App) zoomFrontIsThread() bool {
+	return a.threadDrawnAloneAt(false)
+}
+
+// layoutThreadFront is the threadFront argument every Compute call
+// site passes. While zoomed it resolves through zoomFrontIsThread so
+// the zoomed pane is the front pane; otherwise it is plain
+// threadInFront.
+func (a *App) layoutThreadFront() bool {
+	if a.zoomed {
+		return a.zoomFrontIsThread()
+	}
+	return a.threadInFront()
 }
 
 // computeFrame resolves this frame's layout from the App's state and
@@ -921,7 +961,7 @@ func (a *App) threadDrawnAlone() bool {
 // assembled; tests call it instead of repeating Compute's arguments.
 func (a *App) computeFrame() panelLayoutFrame {
 	return a.layout.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront())
+		a.sidebarVisible, a.threadVisible, a.layoutThreadFront(), a.zoomed)
 }
 
 func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -955,6 +995,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reduceNewMessagePicker,
 		reduceIO,
 		reduceMouse,
+		reduceZoom,
 	); handled {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -2038,6 +2079,30 @@ func (a *App) openThreadPanel(parent messages.MessageItem, channelID, threadTS s
 	return tea.Batch(batch...)
 }
 
+// disarmPendingChords drops any half-entered multi-key chord (ctrl+w …,
+// g …) and restores the default help hint.
+//
+// Both flags are consumed in handleNormalMode (mode_normal.go), which runs
+// AFTER the reducer chain, so any reducer that claims a key starves them.
+// Every state change that makes the chord's hint unreachable must call
+// this, or the chord stays armed with no affordance and silently eats the
+// user's next keystroke.
+//
+// Two callers today: SetMode (a global intercept such as the ctrl+c
+// quit-confirm) and the zoom transitions (which are NOT mode changes —
+// they stay in ModeNormal — and which hide the status row the hint lives
+// in). Pinned by TestFullscreen_ZoomTransitionDisarmsWindowChord.
+//
+// The `if` guard scopes the hint restore to actual disarms, so unrelated
+// helpHint states aren't clobbered.
+func (a *App) disarmPendingChords() {
+	if a.pendingWinCmd || a.pendingTop {
+		a.pendingWinCmd = false
+		a.pendingTop = false
+		a.statusbar.SetHelpHint(a.defaultHelpHint())
+	}
+}
+
 func (a *App) SetMode(mode Mode) {
 	// Global interrupts and workspace switches must abandon an unsubmitted
 	// forward, just like Esc, rather than leave a stale source armed.
@@ -2047,13 +2112,7 @@ func (a *App) SetMode(mode Mode) {
 	}
 	// A mode change always disarms a pending ctrl+w chord — a global
 	// intercept (e.g. ctrl+c quit-confirm) must not strand it armed.
-	// The `if` guard scopes the hint restore to chord disarms only, so
-	// other helpHint states aren't clobbered by unrelated mode changes.
-	if a.pendingWinCmd || a.pendingTop {
-		a.pendingWinCmd = false
-		a.pendingTop = false
-		a.statusbar.SetHelpHint(a.defaultHelpHint())
-	}
+	a.disarmPendingChords()
 	if mode == ModeInsert {
 		a.clearSelections()
 	}
@@ -2178,6 +2237,11 @@ func (a *App) ToggleThread() {
 
 func (a *App) CloseThread() {
 	a.clearSelections()
+	// fs-zoom-invariant: the zoomed pane may be the thread we are about to
+	// tear down. Dropping zoom here rather than in each caller covers `q`,
+	// ctrl+] and every programmatic close. clearZoom, not exitZoom -- the
+	// pane's content is going away, so the saved viewport is meaningless.
+	a.clearZoom()
 	a.threadVisible = false
 	a.statusbar.SetInThread(false)
 	a.threadPanel.Clear()
@@ -3299,9 +3363,11 @@ func (a *App) View() tea.View {
 	previewActive := a.preview.Active()
 
 	var panels []string
-	panels = append(panels, a.renderRail(frame.RailWidth, frame.ContentHeight, themeVer))
-	if a.sidebarVisible {
-		panels = append(panels, a.renderSidebar(frame.SidebarWidth, frame.SidebarBorder, frame.ContentHeight, themeVer))
+	if !a.zoomed {
+		panels = append(panels, a.renderRail(frame.RailWidth, frame.ContentHeight, themeVer))
+		if a.sidebarVisible {
+			panels = append(panels, a.renderSidebar(frame.SidebarWidth, frame.SidebarBorder, frame.ContentHeight, themeVer))
+		}
 	}
 	if frame.MsgWidth > 0 {
 		if s := a.renderWindowsRegion(frame, themeVer, previewActive); s != "" {
@@ -3315,7 +3381,10 @@ func (a *App) View() tea.View {
 		panels = append(panels, a.renderPreviewPanel(frame))
 	}
 
-	status := a.renderStatusRow(frame.RailWidth, a.width-frame.RailWidth, themeVer)
+	status := ""
+	if !a.zoomed {
+		status = a.renderStatusRow(frame.RailWidth, a.width-frame.RailWidth, themeVer)
+	}
 
 	// Compositor memo (Stage A). Skip the JoinHorizontal/JoinVertical
 	// re-composite when no overlay/preview is active and the panel
@@ -3325,9 +3394,19 @@ func (a *App) View() tea.View {
 	// change without bumping any base-panel version, and the preview
 	// panel is rendered fresh (uncached) each frame.
 	canMemo := !previewActive && !a.overlayActive()
+	// Memo key, not the rendered row. While zoomed `status` is always "", so a
+	// toast appearing changed NO memo input and the stale pre-toast frame was
+	// served — which would have made the B45 fix invisible in exactly the case
+	// it exists for. Folding the toast into the key costs nothing when unzoomed
+	// (the status row already carries the toast, so its text is part of
+	// `status`) and only ever adds an invalidation, never suppresses one.
+	statusKey := status
+	if a.zoomed {
+		statusKey = a.statusbar.Toast()
+	}
 	var screen string
 	memoHit := false
-	if canMemo && a.screenMemoMatches(panels, status, a.width, a.height) {
+	if canMemo && a.screenMemoMatches(panels, statusKey, a.width, a.height) {
 		screen = a.lastScreen
 		memoHit = true
 	} else {
@@ -3346,10 +3425,14 @@ func (a *App) View() tea.View {
 		// of the composite cost). stackContentStatus reproduces lipgloss's
 		// left-align padding byte-for-byte; see its doc.
 		screen = stackContentStatus(content, status)
+		// A zoomed frame has no status row, so a toast set while zoomed would
+		// reach no pixels (B45). Paint it on the pane's bottom border row,
+		// BEFORE applyOverlays so a modal still draws over it.
+		screen = a.overlayZoomToast(screen)
 		screen = a.applyOverlays(screen)
 		screen = a.maybeWrapFinalScreen(screen)
 		if canMemo {
-			a.storeScreenMemo(panels, status, a.width, a.height, screen)
+			a.storeScreenMemo(panels, statusKey, a.width, a.height, screen)
 		} else {
 			// Overlay/preview output is not memoizable; force the next
 			// memoizable frame to recompute.
@@ -3551,7 +3634,7 @@ const maxAttachmentSize = 10 * 1024 * 1024 // 10 MB cap
 // progress; the actual UploadResultMsg arm in Update clears it.
 func (a *App) submitWithAttachments(c *compose.Model) tea.Cmd {
 	if a.editing.IsActive() {
-		return a.uploadToastCmd("Cannot attach files to an edit (send a new message)", 3*time.Second)
+		return a.uploadToastCmd("Cannot attach files to an edit (send a new message)", 3*time.Second, toastDeferred)
 	}
 	attachments := c.Attachments()
 	if len(attachments) == 0 {
@@ -3568,13 +3651,13 @@ func (a *App) submitWithAttachments(c *compose.Model) tea.Cmd {
 		threadTS = ""
 	}
 	if channelID == "" || a.files == nil {
-		return a.uploadToastCmd("Cannot upload: no active channel", 2*time.Second)
+		return a.uploadToastCmd("Cannot upload: no active channel", 2*time.Second, toastDeferred)
 	}
 
 	c.SetUploading(true)
 	cmds := []tea.Cmd{
 		teaCmd(a.files.Upload(channelID, threadTS, caption, attachments)),
-		a.uploadToastCmd(fmt.Sprintf("Uploading 0/%d…", len(attachments)), 30*time.Second),
+		a.uploadToastCmd(fmt.Sprintf("Uploading 0/%d…", len(attachments)), 30*time.Second, toastDeferred),
 	}
 	return tea.Batch(cmds...)
 }
@@ -3625,8 +3708,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		if int64(len(imgBytes)) > maxAttachmentSize {
 			return true, a.uploadToastCmd(
 				fmt.Sprintf("Image too large (%s > 10 MB limit)", humanSize(int64(len(imgBytes)))),
-				3*time.Second,
-			)
+				3*time.Second, toastDeferred)
+
 		}
 		filename := "slk-paste-" + time.Now().Format("2006-01-02-15-04-05") + ".png"
 		target.AddAttachment(core.PendingAttachment{
@@ -3637,8 +3720,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		})
 		return true, a.uploadToastCmd(
 			fmt.Sprintf("Attached: %s (%s)", filename, humanSize(int64(len(imgBytes)))),
-			2*time.Second,
-		)
+			2*time.Second, toastDeferred)
+
 	}
 
 	// 2. File-path text.
@@ -3646,10 +3729,10 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 		info, err := a.desktop.Stat(path)
 		if err == nil && info.Mode().IsRegular() {
 			if info.Size() > maxAttachmentSize {
-				return true, a.uploadToastCmd("File too large (>10 MB limit)", 3*time.Second)
+				return true, a.uploadToastCmd("File too large (>10 MB limit)", 3*time.Second, toastDeferred)
 			}
 			if info.Size() == 0 {
-				return true, a.uploadToastCmd("Empty file", 2*time.Second)
+				return true, a.uploadToastCmd("Empty file", 2*time.Second, toastDeferred)
 			}
 			filename := filepath.Base(path)
 			target.AddAttachment(core.PendingAttachment{
@@ -3660,8 +3743,8 @@ func (a *App) tryAttachFromClipboard(target *compose.Model, pathCandidate string
 			})
 			return true, a.uploadToastCmd(
 				fmt.Sprintf("Attached: %s (%s)", filename, humanSize(info.Size())),
-				2*time.Second,
-			)
+				2*time.Second, toastDeferred)
+
 		}
 	}
 
@@ -4117,9 +4200,20 @@ func resolveFilePath(text string) (string, bool) {
 	return filepath.Clean(s), true
 }
 
-// uploadToastCmd builds a tea.Cmd that sets the status bar to the
-// given message and schedules a CopiedClearMsg after dur.
-func (a *App) uploadToastCmd(text string, dur time.Duration) tea.Cmd {
+type toastMode int
+
+const (
+	toastEager toastMode = iota
+	toastDeferred
+)
+
+// uploadToastCmd sets the status bar to the given message and schedules a clear.
+// The eager mode applies it immediately. The deferred mode applies it when the returned batch runs.
+func (a *App) uploadToastCmd(text string, dur time.Duration, mode toastMode) tea.Cmd {
+	if mode == toastEager {
+		a.statusbar.SetToast(text)
+		return copiedClearAfter(dur)
+	}
 	return tea.Batch(
 		func() tea.Msg {
 			a.statusbar.SetToast(text)

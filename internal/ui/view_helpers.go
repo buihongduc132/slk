@@ -79,6 +79,9 @@ func joinPanelsHorizontal(panels []string, height int) (string, bool) {
 // row is wider than the content (a pre-existing statusbar width quirk):
 // lipgloss right-pads the content lines to the status width, and so do we.
 func stackContentStatus(content, status string) string {
+	if status == "" {
+		return content
+	}
 	contentW := 0
 	if nl := strings.IndexByte(content, '\n'); nl >= 0 {
 		contentW = ansi.StringWidth(content[:nl])

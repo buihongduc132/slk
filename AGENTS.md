@@ -87,6 +87,8 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Plain-text line segmentation (grapheme-correct) | `messages.PlainLines`, `messages.DisplayWidthOfPlain`, `messages.SliceColumns` |
 | Display width of a string (emoji-aware) | `emoji.Width(s)` |
 | Case/accent-insensitive fold for matching | `text.Fold(s)` |
+| Rank a candidate name against a typed query | `fuzzy.Match(name, query)` → `(Tier, score, ok)`; folds both sides itself, so pass raw strings |
+| The individual match predicates behind it | `fuzzy.SubsequenceScore` (in-order walk + word-boundary/tightness score), `fuzzy.WordPrefix`, `fuzzy.SquashedPrefix` |
 | Slack mrkdwn → plain text | `messages.FlattenMrkdwn`, `messages.FlattenMrkdwnWithUserGroups` |
 | Search-term highlighting (ANSI/OSC-safe) | `messages.HighlightSearchTerms`, `messages.SearchHighlightSGR` |
 | Extract links from message text | `messages.ExtractLinks` |
@@ -114,6 +116,8 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Window tree geometry | `ui/wintree` |
 | Modal geometry / row hit-testing | `boxedOverlay`, `clickableOverlay` in `internal/ui/reducer_modal_click.go` |
 | Channel/DM destination picker for forwarding | `channelfinder.Model.OpenForForwarding()` (joined conversations only); `Open()` restores the normal switcher |
+| Enter / leave fullscreen pane zoom | `App.enterZoom`, `App.exitZoom` (`internal/ui/reducer_zoom.go`). **Never assign `a.zoomed` directly** — `exitZoom` also invalidates the zoom-keyed caches and restores the saved viewport, and a second hand-rolled exit in `mode_insert.go` was doing neither |
+| Which pane a Compute call should treat as in front | `App.layoutThreadFront()` (`internal/ui/app.go`) — resolves through `zoomFrontIsThread` while zoomed, `threadInFront` otherwise. `windowBounds` is the one deliberate exception (hardcodes `false`) |
 
 ### Test helpers
 
@@ -153,6 +157,21 @@ greppable by name; no line numbers, because these files move.
 | Make nav-history entries resolvable | `navLookupOpt()` (same file) |
 | Run only the first command of a `tea.Batch` (skip a 2s tick) | `firstBatchCmd(t, cmd)` (`internal/ui/mode_insert_keys_test.go`) |
 | Observe a compose cursor position or blur state (no getter exists) | `afterKeyValue(c, r)` (same file) |
+| An `App` zoomed, scrolled mid-history, with a selection | `zoomedScrolledApp(t)` (`internal/ui/fullscreen_red_test.go`) |
+| Enter zoom and assert the frame changed | `mustEnterZoom(t, a, frame)` (same file) |
+| Assert a frame is/isn't the zoomed layout | `assertZoomedFrame(t, a, zoomed, marker)` (same file) |
+| First differing line between two frames, for a diff message | `firstLineDiff(want, got)` (`internal/ui/golden_test.go`) |
+| Strip ANSI from a rendered frame | `stripANSI(s)` (`internal/ui/golden_test.go`) — a one-line wrapper over `ansi.Strip`. **`internal/ui/statusbar` has a second copy** (`statusbar/model_test.go`); call `ansi.Strip` directly in new packages rather than adding a third |
+| Emoji fixtures filtered from the real codemap | `entriesFor(t, names...)` (`internal/ui/emojipicker/fuzzy_test.go`) |
+| Names of a picker's filtered rows | `filteredNames(m)` — **declared twice**, `emojipicker/fuzzy_test.go` (value receiver) and `reactionpicker/fuzzy_test.go` (pointer receiver). Unexported, so neither is reachable from the other; the signatures differ, so consolidating means moving both models' shared shape first |
+| Is a name among a picker's rows? | `containsName(names, want)` — **declared twice**, same two files, identical bodies |
+
+The last four rows are the registration B34 found missing: all eight helpers
+existed and none were listed, which is precisely the condition this table exists
+to prevent. Three of them had already been written twice by the time anyone
+noticed. Treat the "declared twice" notes as debt, not as license — the
+`filteredNames`/`containsName` pair sits inside the two packages this repo's
+fuzzy work set out to unify behind one matcher.
 
 ### Known duplication — do not add to it
 

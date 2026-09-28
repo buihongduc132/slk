@@ -45,9 +45,10 @@ type EditorFinishedMsg struct {
 
 func (a *App) openComposeInEditor() tea.Cmd {
 	if len(a.composeEditor) == 0 {
-		return toastWithClear(a,
+		return a.uploadToastCmd(
 			"No editor configured — set $VISUAL, $EDITOR, or compose.editor in config.toml",
-			4*time.Second)
+			4*time.Second, toastEager)
+
 	}
 
 	panel := PanelMessages
@@ -59,7 +60,7 @@ func (a *App) openComposeInEditor() tea.Cmd {
 
 	path, err := a.editor.WriteDraft(target.Value())
 	if err != nil {
-		return toastWithClear(a, "Could not open editor: "+err.Error(), 3*time.Second)
+		return a.uploadToastCmd("Could not open editor: "+err.Error(), 3*time.Second, toastEager)
 	}
 
 	target.SetEditingExternally(true)
@@ -90,12 +91,12 @@ func reduceEditorFinished(a *App, m EditorFinishedMsg) tea.Cmd {
 
 	content, readErr := a.editor.TakeDraft(m.Path)
 	if readErr != nil {
-		return toastWithClear(a, "Editor: could not read draft back: "+readErr.Error(), 3*time.Second)
+		return a.uploadToastCmd("Editor: could not read draft back: "+readErr.Error(), 3*time.Second, toastEager)
 	}
 	target.SetValue(strings.TrimRight(content, "\n"))
 
 	if launchFailed {
-		return toastWithClear(a, "Could not open editor: "+m.Err.Error(), 4*time.Second)
+		return a.uploadToastCmd("Could not open editor: "+m.Err.Error(), 4*time.Second, toastEager)
 	}
 	return nil
 }

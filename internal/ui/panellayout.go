@@ -43,6 +43,34 @@ type panelLayout struct {
 	sidebarHeight int
 	msgHeight     int
 	threadHeight  int
+
+	// zoomed records whether the frame this layout describes was
+	// computed for a fullscreen pane. It exists so the status-row
+	// height has ONE source of truth: Compute, PanelAt and
+	// reduceMouseClick all derive it through statusRows() (B46).
+	//
+	// Before this field, the rule lived in three places and only
+	// Compute knew about zoom — PanelAt had a literal `height-1` and
+	// no zoomed parameter, reduceMouseClick had its own
+	// `statusHeight := 1`. So while zoomed the pane drew on the last
+	// terminal row and both hit-test paths discarded clicks there.
+	//
+	// A bool rather than a stored height, deliberately: the zero value
+	// must mean "unzoomed, reserve one row", because tests seed the
+	// bands directly without calling Compute
+	// (app_panelat_test.go:37-40). A zero-valued `statusHeight int`
+	// would read as "reserve nothing" and silently change those tests.
+	zoomed bool
+}
+
+// statusRows is how many rows at the bottom of the terminal belong to
+// the status bar rather than to a content pane. The single definition
+// of that rule — see the zoomed field's doc for what it replaced.
+func (l *panelLayout) statusRows() int {
+	if l.zoomed {
+		return 0
+	}
+	return 1
 }
 
 func newPanelLayout() *panelLayout { return &panelLayout{} }
@@ -77,26 +105,34 @@ type panelLayoutFrame struct {
 //
 // Border bits are 2 cols on each non-rail pane (1 col left + 1 col
 // right rounded border).
-func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sidebarVisible, threadVisible, threadFront bool) panelLayoutFrame {
-	const (
-		statusHeight = 1
-		paneBorder   = 2 // left + right border cols
-		minMsgWidth  = 40
-		minThreadW   = 80
-		floorPaneW   = 10
-	)
-	contentHeight := height - statusHeight
+func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sidebarVisible, threadVisible, threadFront, zoomed bool) panelLayoutFrame {
+	l.zoomed = zoomed
+	if zoomed {
+		railWidth = 0
+		sidebarVisible = false
+	}
+	contentHeight := height - l.statusRows()
 
 	sbWidth := 0
 	sbBorder := 0
 	if sidebarVisible {
 		sbWidth = sidebarWidth
-		sbBorder = paneBorder
+		sbBorder = 2 // paneBorder
 	}
+	paneBorder := 2
 	msgAreaWidth := width - railWidth - sbWidth - sbBorder
 
 	var msgWidth, msgBorder, threadWidth, threadBorder int
+	const (
+		minMsgWidth = 40
+		minThreadW  = 80
+		floorPaneW  = 10
+	)
 	switch {
+	case zoomed && threadFront:
+		threadWidth, threadBorder = msgAreaWidth-paneBorder, paneBorder
+	case zoomed && !threadFront:
+		msgWidth, msgBorder = msgAreaWidth-paneBorder, paneBorder
 	case !threadVisible:
 		msgWidth, msgBorder = msgAreaWidth-paneBorder, paneBorder
 	case msgAreaWidth-2*paneBorder >= minMsgWidth+minThreadW:
@@ -146,7 +182,7 @@ func (l *panelLayout) Compute(width, height, railWidth, sidebarWidth int, sideba
 // but accepting them preserves the original behavior when callers feed
 // in stale bands or directly seed layout state (Phase 0 tests do this).
 func (l *panelLayout) PanelAt(x, y, height int, sidebarVisible, threadVisible bool) (panel Panel, paneX, paneY int, ok bool) {
-	if y >= height-1 {
+	if y >= height-l.statusRows() {
 		return PanelWorkspace, 0, 0, false // status bar
 	}
 	switch {

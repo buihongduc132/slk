@@ -451,13 +451,8 @@ func TestReactionPickerModeKeys(t *testing.T) {
 				// below, and this row should be re-pinned to REQUIRE
 				// HasPrefix rather than forbid it.
 				saveCommitted(t, a, &calls, func(name string) {
-					if !strings.Contains(name, "t") {
-						t.Errorf("committed %q, want a name matching the query \"t\"", name)
-					}
-					if strings.HasPrefix(name, "t") {
-						t.Errorf("committed %q, a prefix match: the 50-candidate cap in "+
-							"reactionpicker.filter appears to be fixed, so tier-0-first "+
-							"ranking now works. Re-characterize this row (and drop the BUG?).", name)
+					if !strings.HasPrefix(name, "t") {
+						t.Errorf("committed %q, want a name starting with \"t\" (issue #193 fixed)", name)
 					}
 				})
 			},
