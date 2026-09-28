@@ -2215,3 +2215,66 @@ _(populated by gotcha-coverage + re-runs)_
     "disappearing-by-design observable checked after its lifetime expires" is the
     same error in the time dimension; this is its ordering-dimension twin.
 
+60. **The gotcha-coverage audit (B1..B56) landed with NO completion notification —
+    the cron's known pattern, a fourth time. Of its three ALREADY-FIXED-NO-GUARD
+    findings: one confirmed by mutation and now guarded, one right for the wrong
+    reason, one recorded and not acted on.**
+
+    It named `0cc7175`, so its base was correct. I found it by reading the
+    transcript after 28 minutes of silence rather than concluding the agent died.
+    Note that `pgrep -f <agent-id>` reported it "alive" by matching **my own
+    shell's command line** — the same false positive as `pgrep -af verify-commit`
+    earlier. `readlink /proc/<pid>/cwd` against the agent worktree cannot alias
+    and is the check to use.
+
+    **Its COUNTS do not reconcile: 27+10+8+20+3+2 = 70 against 56 items.** Seven
+    are doc/behaviour splits it documents; seven more (B19–B28) are double-listed
+    by a "folded into COVERED/FIXED below" phrasing. Explicable, but the
+    classifications were specified mutually exclusive, so **those totals cannot be
+    quoted as a coverage figure** — item 56's state-dependent-denominator lesson
+    reached from another direction.
+
+    **B35 — CONFIRMED by mutation, now guarded (`5665841`).** Its description was
+    stale exactly as the best-practice audit's was: it claimed `kitty.go:73` makes
+    a "direct `os.Getenv("TMUX")` bypassing the package's own injectable
+    accessor", but that line already reads `getenv("TMUX")` and carries a comment
+    naming the B35 fix. Its prescribed mutation would now pass trivially.
+
+    The classification was still right, and proving it needed a mutation the audit
+    did not describe: swap back to `os.Getenv("TMUX")` **and add the `os` import**,
+    since `kitty.go` does not import it and the naive mutation cannot compile. With
+    that, `go test ./...` is **entirely GREEN** — the comment was the whole
+    invariant. Two guards now, both proven to fire on it and to pass clean:
+    behavioural (injects a sentinel the real environment cannot supply, plus a
+    negative leg that a hardcoded `return true` fails) and structural (catches the
+    class at any future call site; expected count is **zero** `os.Getenv` *calls*,
+    because the legitimate site is `var getenv = os.Getenv`, a function value).
+
+    **B2 — right conclusion, wrong reason, and the reason is the finding.** It
+    claimed no test asserts "exactly one toast-cmd constructor exists". One does,
+    and it works — I mutation-tested it earlier today. What escapes is the case the
+    audit never tested: the oracle matches a **hardcoded two-name list**, so a
+    third constructor under a *new* name is invisible. Verified — `flashToast`,
+    wired and compiling, leaves both the oracle and the whole repo GREEN.
+    **Novelty of name defeats a name-matching oracle.** Not fixed here: making it
+    structural is a design decision touching a pinned oracle.
+
+    **B34-registration** (nothing keeps AGENTS.md's table accurate) recorded, not
+    acted on. Its feasible half — asserting every symbol the table names still
+    exists — catches staleness in the direction that misleads readers; the other
+    half needs a definition of "reusable" no test can supply.
+
+    **My harness printed four confident wrong verdicts this round.** A
+    `SetToast(text, d)` call against a one-argument signature; the bubbletea import
+    as `github.com/charmbracelet/bubbletea/v2` when the module is
+    `charm.land/bubbletea/v2`; an escaped quote in nested shell quoting that created
+    two stray files (`CAUGHT"`, `negative`) in the repo root; and
+    `grep -c '^--- FAIL'` reporting 1 where 2 failed, because a base64
+    kitty-protocol blob printed with no trailing newline so the second marker was
+    not at line start. The first two were caught **only** because
+    `mutate-check.sh` refuses a verdict when the tree does not compile (exit 2) —
+    without that, "the mutation survived" would have been filed as B2 confirmed on
+    a tree that never built. **The compile gate earned its keep.** The lint `rc=1`
+    in that run was my own dead probe flagged `unused`, not lint seeing
+    duplication: zero findings mentioned it.
+
