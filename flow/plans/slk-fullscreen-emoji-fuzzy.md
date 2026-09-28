@@ -2546,3 +2546,63 @@ _(populated by gotcha-coverage + re-runs)_
     B15 **not test gaps** (unestablished premise; missing seam). Plus all three
     ALREADY-FIXED-NO-GUARD items closed earlier: B35 `5665841`, B2 `0d3d80f`,
     B34-registration `6d7740c`.
+
+64. **Everything re-verified at `9c05241`, and two more harness scripts could
+    return a verdict code for a usage error.**
+
+    The eight commits from `0d3d80f` through `9c05241` were ungated. Re-run in
+    full, each from a clean checkout with `head` and `dirty` cross-checked:
+
+    - **Seven lanes GREEN** (zoom, fuzzy, toast, sep, xdg, fold, digits), every
+      one reporting `head=9c05241 want=9c05241 dirty=0`.
+    - **Five fast gates GREEN**: `go build`, `go vet`, `gofmt` (0 of **676**
+      files, nested `go.mod` pruned), `golangci-lint` **0 issues**, and
+      `go test ./... -race` at **60 packages / 0 FAIL**.
+    - **slk-dev redeployed** from the gated tree, both isolation controls
+      holding (positive: 1 workspace row resolved under the dev roots; negative:
+      an empty root correctly found nothing). Live `config.toml` **byte-identical**
+      (`cmp` rc=0), one token file at mode 600, `cache.db` copied by sqlite
+      `.backup` with `integrity_check ok` and 399 `custom_emoji` rows persisted
+      after a real run.
+    - **Capability suite: 24 PASS / 0 FAIL.** Three probes green — autoclear
+      `rc=0` (zoom CLEARED), zoom-focus 4/0/0, threads-toast 10/0/0.
+    - **All 14 pins verify** (10 repo oracles + 4 `gate.sh`).
+
+    **The deploy nearly shipped the wrong tree, through the door item 57
+    described.** `deploy-slk-dev.sh` defaults its source to
+    `~/.worktrees/slkfz-int`, and `verify-commit.sh` checks the commit under test
+    into the LANE worktrees — not into `slkfz-int`, which was still at `bc297f5`,
+    two dozen commits back. Deploying from the default would have produced a
+    working, confidently-reported slk-dev built from a tree the gate never
+    measured. Caught by checking the source worktree's SHA against HEAD before
+    invoking, which is now the routine: **the tree you deploy from must be the
+    tree you gated, and "the gate was green" says nothing about which worktree
+    holds that commit.** Deployed from the main repo at `9c05241` instead of
+    moving a branch, since branch moves are the user's call.
+
+    **Two scripts collided a usage error with a verdict, and one of them bit me
+    in this very run.** `probe-zoom-autoclear.sh` documents `1 = zoom leaked
+    (B13)`, but its `BIN="${1:?usage...}"` exits **1** under `set -u` — so my
+    argument-less invocation printed a usage line and returned the code that
+    means "regression found". I read it as a failing probe for a moment.
+    `mutate-check.sh` had the same shape and worse stakes: its `1` is
+    **SURVIVED**, i.e. "no guard exists, the finding is CONFIRMED", so a
+    mistyped invocation could have been filed as a confirmed defect.
+
+    Both now exit **64** (sysexits `EX_USAGE`, matching `verify-commit.sh`) with
+    an explicit `[ $# -lt N ]` guard, verified: no args → 64, too few args → 64,
+    real invocations unchanged (the probe re-run gave `rc=0` and the same
+    verdict). **A harness must not be able to answer its own question by
+    accident.** That is the sixth false-verdict-shape found in my own tooling
+    this effort, and the second today after `b51-control.sh`'s non-idempotent
+    EXIT trap; the difference here is that the collision was latent in the exit
+    contract itself rather than in control flow.
+
+    Also retired `check-agentsmd-symbols.sh`, the shell script whose false
+    "1 stale row" verdict opened item 62. It is now a stub that exits 64 and
+    explains both of its bugs — a declaration regex that matched a name inside a
+    `const (...)` block but not a standalone `const X = 130`, and an extraction
+    that took only the first backticked token per row, never checking 4 of the
+    symbols it claimed to cover. Kept as a file rather than deleted so the
+    reference in item 62 resolves to the reason. **A regex is not a parser**; the
+    replacement walks the module with `go/ast`.
