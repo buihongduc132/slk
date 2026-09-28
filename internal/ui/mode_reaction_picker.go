@@ -63,6 +63,11 @@ func handleReactionPickerMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	// Record frecent usage on add (not remove).
 	if !result.Remove {
 		a.reactions.RecordFrecent(emojiName)
+		// The compose dropdown's recent tier is pushed, not pulled
+		// (it opens from compose's own `:` handling, which never
+		// reaches App), so refresh it here — the one moment the
+		// frecent list is known to have changed.
+		a.refreshComposeFrecent()
 	}
 
 	// Optimistic update.

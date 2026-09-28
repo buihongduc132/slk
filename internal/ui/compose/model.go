@@ -1076,6 +1076,16 @@ func (m *Model) SetEmojiCustoms(customs map[string]string) {
 	m.emojiPicker.SetEmojiCustoms(customs)
 }
 
+// SetFrecentEmoji forwards the frequently/recently used emoji list to the
+// underlying autocomplete picker, which uses it as filter()'s recent
+// tier. Called from App.refreshComposeFrecent — the data originates at
+// core.ReactionService.LoadFrecent, so compose does no I/O of its own.
+// nil or empty restores tier-only ranking.
+func (m *Model) SetFrecentEmoji(entries []core.EmojiEntry) {
+	m.emojiPicker.SetFrecentEmoji(entries)
+	m.dirty()
+}
+
 // IsEmojiActive returns whether the emoji picker is currently showing.
 func (m Model) IsEmojiActive() bool { return m.emojiActive }
 

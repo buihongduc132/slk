@@ -99,6 +99,7 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Channel-type glyph (`#` / `◆` / `●`) | `messages.ChannelGlyph(chType)` |
 | Slack permalink parsing | `slackurl.Parse` |
 | Emoji shortcode → glyph | `emoji.Sprint`, `emoji.CodeMap`, `emoji.StripSkinTone` |
+| Frecent ("recent") emoji tier on an emoji surface | `SetFrecentEmoji([]core.EmojiEntry)` on **both** `reactionpicker.Model` and `emojipicker.Model`; data comes from `core.ReactionService.LoadFrecent` via `App` — never read the cache from inside `internal/ui` |
 | Does Block Kit already render the message body? | `blockkit.RendersBody(blocks)`, `messages.BlocksCarryBody(msg)` |
 | Current DND state from a Slack API result | `slack.DNDStateFromStatus` |
 | Peer custom status, DND and huddle rendering | `ui/peerstatus` (`Status`, glyph/expiry/summary methods); `messages.AuthorStatusSuffix` for author headers |

@@ -3200,6 +3200,37 @@ func (a *App) SetReactionService(r core.ReactionService) {
 		r = noopReactionService
 	}
 	a.reactions = r
+	// Seed the compose dropdowns' recent tier now that a real service is
+	// available. The reaction picker reloads per-open (openPickerFrom*),
+	// but the compose dropdown opens from inside compose's own `:` key
+	// handling, which never reaches App — so it is pushed instead of
+	// pulled. See refreshComposeFrecent.
+	a.refreshComposeFrecent()
+}
+
+// frecentEmojiLimit is how many frecent rows the emoji surfaces ask for.
+// Matches the limit the reaction picker has always used.
+const frecentEmojiLimit = 10
+
+// refreshComposeFrecent pushes the current frecent emoji list into both
+// compose dropdowns (main + thread), supplying filter()'s recent tier.
+//
+// PUSH, not pull, and deliberately so: the compose emoji dropdown is
+// opened by compose's own `:` trigger without consulting App, so there is
+// no per-open hook to load from. Calling LoadFrecent on every keystroke
+// would put a cache read in the render path. Instead this runs at the two
+// moments the list can change: service wiring (startup) and just after a
+// reaction records a use.
+//
+// All I/O stays behind core.ReactionService — internal/ui does none of
+// its own (internal/ui/boundary_test.go).
+func (a *App) refreshComposeFrecent() {
+	if a.reactions == nil {
+		return
+	}
+	entries := a.reactions.LoadFrecent(frecentEmojiLimit)
+	a.compose.SetFrecentEmoji(entries)
+	a.threadCompose.SetFrecentEmoji(entries)
 }
 
 func (a *App) SetCurrentUserID(userID string) {
