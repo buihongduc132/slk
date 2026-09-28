@@ -497,6 +497,72 @@ _(populated by gotcha-coverage + re-runs)_
       redundancy. It is additive, has its own API decision, and is a separate
       item — the 3× inside `Match` was the bulk of the win.
 
+31. **B40 is closed by coverage, and investigating it found a FOURTH vacuity
+    shape: a test that authors its own subject.** `dod-2`'s "zero network wait"
+    now has two guards in `cmd/slk/startup_emoji_order_test.go`.
+    - **The existing test could not have caught this, and the reason is
+      structural.** `TestStartupEmojiOrder_SeedBeforeFetch` calls
+      `runStartupEmoji`, which is declared at `customemojiseed_test.go:111` — **in
+      a test file**. It is a two-line helper that calls `seedCustomEmojiFromCache`
+      then `fetchWorkspaceEmojiIntoCache` synchronously. So the sequence whose
+      order that test pins is *a sequence the test wrote*. It proves the two
+      functions compose correctly in that arrangement; it cannot prove production
+      uses that arrangement, and production does not.
+    - **This is a new entry in OT27's catalogue.** The three there recompute a
+      value they should observe. This one is different: the subject itself is
+      manufactured by the test. Same symptom — an assertion that cannot fail for
+      the reason it was written — different cause. *Ask what production actually
+      executes, not just where the value came from.*
+    - **What production does**, `main.go:1572-1600`: `seedCustomEmojiFromCache`
+      synchronously → `p.Send(ui.WorkspaceReadyMsg{...})` → **`go`**
+      `fetchWorkspaceEmojiIntoCache`. Three load-bearing properties, and ordering
+      alone is not one of them: a seed-before-fetch that *awaited* the fetch
+      before the send would satisfy every pre-existing test while putting
+      `emoji.list` back on the first-paint path. That is precisely the regression
+      `dod-2` exists to prevent.
+    - **The guards are structural, and that is a considered choice, not
+      laziness.** The sequence is inline in a function that builds a live Slack
+      client, a SQLite handle and a `tea.Program`; there is no seam for a blocking
+      lister without refactoring startup. The property being asserted *is*
+      structural — a `go` keyword and a statement order. Between no assertion and
+      an assertion over program text, the second is worth having.
+    - **Proven by mutation, with the contrast that justifies the file.** Delete
+      the `go` → `TestStartupEmoji_ProductionOrderIsSeedSendThenAsyncFetch` fails.
+      Background the seed → `TestStartupEmoji_SeedIsSynchronousAtItsCallSite`
+      fails, and only that one. `TestStartupEmojiOrder_SeedBeforeFetch` stays
+      **GREEN under both**.
+    - **Open, deliberately not done here**: extracting the startup ordering into
+      an injectable function would allow a real blocking-lister test. That is a
+      change to the startup path with real risk, and it wants its own lane.
+
+32. **B34's leftovers are two different situations, and only one was a defect.**
+    The appendix listed `stripANSI`, `filteredNames` and `containsName` as "each
+    declared twice". Reading them changes the verdict.
+    - **`filteredNames` / `containsName`: NOT a defect, closing as won't-fix.**
+      The two copies differ in signature (`*Model` in `reactionpicker` vs `Model`
+      in `emojipicker`) *and* body (`m.filtered` vs `m.Filtered()`). They are
+      per-package adapters onto two genuinely different model APIs, so they are
+      the *divergent* part, not the uniform one. AGENTS.md's own rule governs:
+      "Extract the substrate, not the widget… Forcing genuinely different
+      behavior into a common shape is worse than the duplication it removes."
+      Unifying them means unifying the two pickers' APIs, which is Phase 4.
+    - **`stripANSI`: a real defect, and worse than duplication — the two copies
+      were NOT EQUIVALENT.** `internal/ui` calls `ansi.Strip`. `statusbar` had a
+      hand-rolled byte loop ending each escape at the first ASCII letter: correct
+      for SGR, wrong for OSC. Measured:
+      `"\x1b]8;;https://example.com/a\x07label\x1b]8;;\x07"` stripped to
+      `"ttps://example.com/a\alabel"` — it leaks the URL into the result **and
+      eats the `h` of `https`**, because `h` is a letter. The ST-terminated form
+      lost the `l` of `label` too.
+    - Latent, not active: `statusbar` emits no hyperlinks today, so nothing was
+      reading corrupted text. But 17 call sites use that helper, and a URL
+      silently spliced into the string an assertion matches against is the kind of
+      thing that gets diagnosed as a rendering bug. Now delegates to `ansi.Strip`;
+      all 17 still pass.
+    - **The general lesson, which is the same one B27 and B26 taught**: "declared
+      twice" is a claim about names. Whether the two *bodies agree* is a separate
+      question, and it was the interesting one in all three cases.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
