@@ -54,6 +54,7 @@ func runsWithoutBackground(s string) []string {
 func blockLinesFor(t *testing.T, blocks []blockkit.Block) string {
 	t.Helper()
 	styles.Apply("nord", config.Theme{})
+	t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 	res := blockkit.Render(blocks, blockkit.Context{
 		RenderText: func(s string, un map[string]string) string {
 			return RenderSlackMarkdownWith(s, RenderSlackMarkdownOpts{UserNames: un})
@@ -111,6 +112,7 @@ func TestBlockKitLines_HeaderAndContextKeepBackground(t *testing.T) {
 // so a passing test above means something.
 func TestRunsWithoutBackground_DetectsTheDefect(t *testing.T) {
 	styles.Apply("nord", config.Theme{})
+	t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 	broken := styles.MessageText.Render("     ") + "unstyled text\x1b[3mitalic\x1b[m"
 	if bare := runsWithoutBackground(broken); len(bare) == 0 {
 		t.Error("detector found nothing in a deliberately broken line")
@@ -122,6 +124,7 @@ func TestRunsWithoutBackground_DetectsTheDefect(t *testing.T) {
 // run at the start of every line bare.
 func TestWithBackground_PrefixesAndPatches(t *testing.T) {
 	styles.Apply("nord", config.Theme{})
+	t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 	bg := BgANSI()
 
 	got := WithBackground([]string{"plain\x1b[mmiddle\x1b[0mtail"}, bg)
@@ -149,6 +152,7 @@ func TestWithBackground_EmptyBackgroundIsPassthrough(t *testing.T) {
 // wiring is what is under test.
 func TestBuildCache_BlockKitRunsKeepBackground(t *testing.T) {
 	styles.Apply("nord", config.Theme{})
+	t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 	msg := MessageItem{
 		TS:        "1700000000.000000",
 		UserName:  "github",

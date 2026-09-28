@@ -78,6 +78,7 @@ func workspaceFinderOpts() []testOpt {
 type switchedTeamMsg struct{ teamID string }
 
 func openWorkspaceFinder(t *testing.T, a *App) {
+	t.Helper()
 	a.setWorkspaceSwitcherForTest(func(teamID string) tea.Msg {
 		return switchedTeamMsg{teamID: teamID}
 	})
