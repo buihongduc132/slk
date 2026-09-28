@@ -13,6 +13,7 @@ import (
 // be non-trivial or every navigation row below would pass vacuously,
 // so the precondition is checked.
 func openHelp(t *testing.T, a *App) {
+	t.Helper()
 	a.help.SetEntries(help.FromKeyMap(a.keys))
 	a.help.Open()
 	if !a.help.IsVisible() {
@@ -26,6 +27,7 @@ func openHelp(t *testing.T, a *App) {
 // openHelpSearching opens the overlay and enters /-search mode, which
 // is a second, disjoint key regime inside help.HandleKey.
 func openHelpSearching(t *testing.T, a *App) {
+	t.Helper()
 	openHelp(t, a)
 	_ = dispatchModeKey(a, keyPress('/'))
 	if !a.help.IsSearching() {

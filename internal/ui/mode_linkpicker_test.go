@@ -15,6 +15,7 @@ import (
 // openLinkPicker drives the production `o` path
 // (App.openLinksOfSelected) with a two-link message.
 func openLinkPicker(t *testing.T, a *App) {
+	t.Helper()
 	a.focusedPanel = PanelMessages
 	a.messagepane.SetMessages([]messages.MessageItem{{
 		TS:   "1.0",
@@ -38,6 +39,7 @@ func openLinkPicker(t *testing.T, a *App) {
 // (App.downloadFilesOfSelected) with a two-attachment message. The
 // picker is the same modal; only pickerKind differs.
 func openFilePicker(t *testing.T, a *App) {
+	t.Helper()
 	a.focusedPanel = PanelMessages
 	a.messagepane.SetMessages([]messages.MessageItem{{
 		TS:          "1.0",

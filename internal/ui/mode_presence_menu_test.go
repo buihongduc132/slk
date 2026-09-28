@@ -20,6 +20,7 @@ const presenceMenuAllRows = 10
 // every setStatusFn call.
 func openPresenceMenu(calls *[]statusCall, withSetter bool) func(*testing.T, *App) {
 	return func(t *testing.T, a *App) {
+		t.Helper()
 		*calls = nil
 		if withSetter {
 			a.setStatusSetterForTest(func(action core.PresenceAction, mins int) {

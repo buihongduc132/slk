@@ -42,6 +42,7 @@ func newMessageOpts() []testOpt {
 }
 
 func openNewMessagePicker(t *testing.T, a *App) {
+	t.Helper()
 	a.newMessagePicker.SetUsers(newMessageUsers())
 	a.newMessagePicker.Open()
 	if !a.newMessagePicker.IsVisible() {
