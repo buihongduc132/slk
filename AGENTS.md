@@ -92,7 +92,7 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Slack mrkdwn → plain text | `messages.FlattenMrkdwn`, `messages.FlattenMrkdwnWithUserGroups` |
 | Slack mrkdwn → styled/rendered text, or → CommonMark | `messages.RenderSlackMarkdownWith(text, opts)` (`render.go:670`); `messages.SlackMrkdwnToCommonMark` / `SlackMrkdwnToCommonMarkWithUserGroups` (`render.go:916,922`) — the sibling of `FlattenMrkdwn` for callers that want CommonMark or styled output instead of plain text; used by `internal/export/markdown.go`, `internal/ui/app.go`, `internal/ui/thread/model.go`, `internal/ui/activityview`, `internal/ui/threadsview` |
 | Which mrkdwn string a message should actually render | `messages.MessageTextSource(msg)` (`model.go:530`) — the block-vs-text-field resolution rule; called from 3 places outside its own package (`internal/export/markdown.go`, `internal/ui/app.go`, `internal/ui/thread/model.go`), so it belongs beside `BlocksCarryBody` above, not reimplemented at each call site |
-| SGR background/foreground codes for a rendered line | `messages.BgANSI()` / `messages.FgANSI()` (`render.go:549,580`), `messages.ReapplyBgAfterResets(text, style)` (`render.go:274`) — `BgANSI` alone is referenced from 18 files, `ReapplyBgAfterResets` from 17, `FgANSI` from 11; despite that reach none of the three were in this table before now |
+| SGR background/foreground codes for a rendered line | `messages.BgANSI()` / `messages.FgANSI()` (`render.go:549,580`), `messages.ReapplyBgAfterResets(text, style)` (`render.go:274`) — all three are heavily used across the package and none was listed in this table before now |
 | Search-term highlighting (ANSI/OSC-safe) | `messages.HighlightSearchTerms`, `messages.SearchHighlightSGR` |
 | Extract links from message text | `messages.ExtractLinks` |
 | Does message text mention the current user? | `mention.InText(text, selfUserID)` |
@@ -253,8 +253,9 @@ than assume: either something that used to call it was removed and it was
 missed, or a caller path exists that a plain grep for the identifier can't
 see. Confirm before removing it.
 
-**Scope gap: `cmd/slk` has no helper table.** `cmd/slk` carries ~103 unexported
-top-level functions across 37 non-test files and, unlike every `internal/ui/*`
+**Scope gap: `cmd/slk` has no helper table.** `cmd/slk` carries 103 unexported
+top-level functions (`^func [a-z]`, excluding `_test.go`) across 39 non-test
+files and, unlike every `internal/ui/*`
 package, none of them are tracked anywhere above — the only `cmd/slk` entries
 in this file are the composition-root description, the `-race` timing, the
 I/O-boundary note, one clipboard-writer row, and the
