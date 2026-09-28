@@ -1967,3 +1967,88 @@ _(populated by gotcha-coverage + re-runs)_
     print a verdict line and the gates print `GATE 0:`, and why this run is
     recorded below as `rc=0, 28 PASS / 0 FAIL` rather than as a fraction.
 
+57. **Delegated audits landed on a tree 117 commits stale, and I caught it by
+    accident. Plus: `gofmt -l .` is not module-aware, which made my own gate
+    corruptible by another agent's mid-edit.**
+
+    **The stale-base trap.** `Agent(isolation: "worktree")` creates the worktree
+    with base ref **`fresh`**, which branches from **`origin/<default-branch>`** —
+    *not* local HEAD. With 117 commits unpushed, both audit subagents landed on
+    `2b43b29` while the tree to audit was `0cc7175`. A gotcha-coverage audit run
+    there would have reported most of B41..B56 as UNCOVERED, because at that base
+    the guarding tests genuinely are absent. **A confident, well-evidenced,
+    completely wrong report.**
+
+    This is the B16 family — *a verdict that describes the wrong tree is worse
+    than a red* — arriving through a door the gates do not watch.
+    `verify-commit.sh` cross-checks `head=` for all seven lanes precisely because
+    of B16; nothing did that for subagents. I found it only because I ran
+    `git worktree list` looking for a scratch worktree for something else.
+
+    **What did not work, and the lesson in it.** I messaged both agents to check
+    out `0cc7175`. Ten minutes later `git worktree list` still showed both at
+    `2b43b29`. Steering a running agent mid-flight is not reliable; the spawn was
+    my error and the fix belonged in the prompt. I stopped both and respawned with
+    the checkout as a **mandatory step 0**, including a required first report line
+    `Audited commit: <sha>` so a stale run is self-evident rather than something I
+    have to notice. **Any delegated report that does not name the commit it
+    measured is unreadable.**
+
+    **`gofmt -l .` walks nested agent worktrees. Proven, not reasoned.** Unlike
+    `go build ./...`, which is module-aware (63 packages listed, **0** under
+    `.claude`), `gofmt` is a plain file walker. Measured here: **12 agent
+    worktrees under `.claude/worktrees/` holding 7,845 `.go` files**, against the
+    module's own 667. Planting one unformatted file inside an idle agent worktree
+    made `gofmt -l .` report 1 while the pruned walk reported 0; removing it
+    returned both to 0.
+
+    So AGENTS.md's required `gofmt -l .` empty check — and my `fast-gates.sh`
+    copy of it — **can go RED because a different agent is mid-edit in a tree the
+    gate is not measuring.** Every previous GREEN was genuine but lucky.
+
+    **The fix is the general one, not a blacklist.** `gates/xdg/PIN-CHANGED.md`
+    already settled this exact question for the xdg walk: prune any directory
+    carrying its **own `go.mod`**, because such a directory is a different module
+    — a worktree, a vendored copy, a nested example. A `.claude` blacklist fixes
+    this case and leaves the next one. `-mindepth 1` spares the repo root, which
+    has `go.mod` and must not be pruned. Enumerates 667 files vs `go list`'s 659;
+    the 8 extra are build-tag-excluded and should still be formatted.
+
+    A **V2 guard** went in alongside it: if the enumeration returns 0 files the
+    gate reports RED, because a broken walk would otherwise make gofmt vacuously
+    green — the same shape as the "pathspec matched 0 files" check the lane gates
+    already carry. Verified by running the walk in an empty directory.
+
+    **A mutation harness now exists**, `~/.local/state/slkfz/mutate-check.sh`,
+    because step 1 of this round is to re-verify each delegated finding by
+    actually mutating production code, and doing that by hand across 20+ findings
+    invites exactly the sloppiness this plan keeps recording. Exit contract
+    mirrors the lane gates: `0` CAUGHT (a guard exists), `1` SURVIVED (unguarded,
+    finding confirmed), `2` INVALID, `125` UNTESTABLE.
+
+    Its own central trap is stated in its header: **a `sed` that matches nothing
+    is a no-op mutation, the tests then pass, and a naive harness reports
+    SURVIVED for every finding handed to it.** So it counts occurrences before
+    and after, requires `git diff` to see a change, requires the mutated tree to
+    still **compile** (a mutation crude enough to break the build makes every test
+    fail, which reads as CAUGHT while nothing semantic was checked), and requires
+    the target package to be **green at baseline** (an already-red package reports
+    CAUGHT for any mutation).
+
+    **It was validated before use, on a true discrimination pair:** the same
+    mutation (`s.DNDEnd.In(now.Location())` → `s.DNDEnd.Local()`) in the same
+    package gives **SURVIVED at `6e9d983^`** and **CAUGHT at `0cc7175`**, naming
+    `TestSummary_FormatsDNDEndInTheClocksZone` — the one commit that added the
+    guard. The no-op case correctly returns 2. A harness that cannot show an
+    opposite verdict across a known boundary is not evidence of anything.
+
+    **The zsh `PIPESTATUS` trap bit me twice more in this round** (item 55 is the
+    first). A pin check reported **all ten oracles mismatched** — false; the
+    shell's PATH had broken mid-call, `cut` was missing, and the empty string
+    compared unequal to every hash. Then `>> rc=$?` after a piped harness run
+    printed 0 three times, reading the `sed` at the end of the pipe. Both times
+    the adjacent raw output contradicted the verdict, which is the only reason I
+    caught them. **Three occurrences in one session makes this the most durable
+    lesson here: capture `$?` directly with no pipe, and verify the tools exist
+    before trusting a comparison built from their output.**
+
