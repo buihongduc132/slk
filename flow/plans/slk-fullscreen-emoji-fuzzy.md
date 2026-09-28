@@ -433,6 +433,48 @@ _(populated by gotcha-coverage + re-runs)_
       pins the invariant such a fix must not break, so that lane inherits a guard
       instead of starting from nothing.
 
+30. **B26 is closed (`9255c8b`, lane `slkfz/lane-fold`), and building its oracle
+    corrected the batch-2 appendix about where the cost actually is.** `Match` now
+    folds each argument once and hands the already-folded pair to unexported
+    `wordPrefixFolded` / `squashedPrefixFolded`. The exported `WordPrefix` and
+    `SquashedPrefix` still fold, because `internal/ui/mentionpicker/match.go:42,45`
+    calls both with **raw** input — that was the one regression this change could
+    plausibly cause, and it is the thing the gate's P2P note points at.
+    - **The appendix blamed the wrong inputs.** It attributes the cost to
+      "non-ASCII candidates (accented custom emoji, display names like
+      `Mélanie`)". That is precisely the case where the redundant folds are
+      **free**: `Fold("Mélanie")` returns `"melanie"`, which is ASCII, so every
+      re-fold takes `Fold`'s `isASCII` fast path and allocates nothing.
+    - **The waste requires the FOLDED FORM to still be non-ASCII** — CJK, emoji
+      and `ß`, which `Fold` deliberately does not decompose (NFD, not NFKD).
+      Measured with `testing.AllocsPerRun(200)` before the fix: `Fold` vs a
+      re-fold of its own output vs whole `Match` — `engineering-platform` 0/0/0,
+      `Mélanie-Dupont` 9/**0**/9, `日本語チャンネル` 6/**6**/38,
+      `party_parrot_🦜` 6/6/12, `Straße-Team` 7/6/13.
+    - **It also scales with tier depth**, since each tier that runs folds twice
+      more. So the worst case is a **miss**, which is most candidates on every
+      keystroke — exactly the hot loop issue #165 was about. Benchmarked
+      `-benchmem`, CJK miss: `9561 ns / 26296 B / 20 allocs` →
+      `3541 ns / 8792 B / 8 allocs`. The ASCII control moved `487 → 376 ns` at 2
+      allocs either way, **which is why no existing benchmark could see this** and
+      why the oracle's corpus is entirely non-ASCII. An ASCII corpus would make
+      the assertion vacuous: every fold there is 0 allocations, so one fold and
+      three are indistinguishable.
+    - **The oracle measures its own floor at run time** — fold the name once, fold
+      the query once, count that — rather than hardcoding a bound. It therefore
+      pins a *ratio*, needs no re-blessing on a toolchain or `x/text` bump, and
+      cannot be satisfied by aliasing. `TestMatch_ResultsAreUnchangedByTheFoldFix`
+      is the paired guard, green before and after: folding is idempotent, so no
+      answer may move, and if one did it would mean allocations were saved by
+      skipping a tier — a ranking change disguised as a performance fix.
+    - **Still open, scoped out deliberately**: all three loop callers
+      (`emojipicker/model.go:138`, `reactionpicker/model.go:245`,
+      `channelfinder/model.go:397`) already fold the query once *outside* their
+      filter loop and pass it in, where `Match` folds it again per candidate. A
+      `Matcher` holding a pre-folded query for a whole scan removes that last
+      redundancy. It is additive, has its own API decision, and is a separate
+      item — the 3× inside `Match` was the bulk of the win.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
