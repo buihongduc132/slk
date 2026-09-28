@@ -152,6 +152,13 @@ func (m *Model) SelectedEntry() (emoji.EmojiEntry, bool) {
 // filter walks entries in input order and keeps the first MaxVisible
 // matches. Callers must pass alphabetically-sorted entries
 // (emoji.BuildEntries already does); the picker preserves that order.
+//
+// That preservation is a property of this function, not a request to the
+// reader: order_preserved_test.go pins it, for the empty-query path, for
+// same-tier matches (where step 4 below is the only discriminator), for
+// the MaxVisible cap, and across a re-filter via SetQuery. Those tests
+// hand in a deliberately unsorted slice, so they hold independently of
+// what order BuildEntries happens to produce.
 func (m *Model) filter() {
 	q := text.Fold(m.query)
 

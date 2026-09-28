@@ -27,19 +27,21 @@ import (
 // WHAT IT ASSERTS: every backticked, identifier-shaped token in every markdown
 // table row of AGENTS.md resolves to a name that exists in this module — a
 // declaration (func, method, type, const, var, struct field), a package
-// directory, or a string literal in the source.
+// directory, a string literal in the source, or an import alias.
 //
-// WHY THE THREE SOURCES: the tables legitimately name more than test helpers.
+// WHY THE FOUR SOURCES: the tables legitimately name more than test helpers.
 // Rows name production fields the helpers set (threadVisible, yOffset,
 // forceSixelRepaint), packages rather than symbols (threadsview,
-// newmessagepicker), and one external binary (pbcopy, in the clipboard row) that
-// exists only as an argument to exec.Command. Measured over the current file:
-// 121 tokens are checked, exactly one of which — pbcopy — resolves through the
+// newmessagepicker), one external binary (pbcopy, in the clipboard row) that
+// exists only as an argument to exec.Command, and one required import alias
+// (slktext, which internal/emoji must use because that package's own tests
+// declare a package-level helper named `text`). Measured over the current file:
+// 140 tokens are checked, exactly one of which — pbcopy — resolves through the
 // string-literal source alone. The literal set is broad (22k values), so it is
-// the weakest of the three; that is a deliberate trade. For a documentation
+// the weakest of the four; that is a deliberate trade. For a documentation
 // guard a false RED is costly and a false GREEN is merely a missed catch, and
 // the failure this is aimed at — a name that has left the module entirely — is
-// caught by all three sources going quiet at once.
+// caught by all four sources going quiet at once.
 //
 // WHAT IT DOES NOT ASSERT, and cannot:
 //
@@ -101,8 +103,8 @@ func TestAGENTSMD_EveryTableRowNamesSomethingThatExists(t *testing.T) {
 
 	for _, tok := range unresolved {
 		t.Errorf("AGENTS.md names %q, which no longer exists anywhere in this module "+
-			"(no declaration, no package directory, no string literal). The row is stale: "+
-			"fix AGENTS.md, or restore the name.", tok)
+			"(no declaration, no package directory, no string literal, no import alias). "+
+			"The row is stale: fix AGENTS.md, or restore the name.", tok)
 	}
 	t.Logf("checked %d tokens from AGENTS.md tables against %d declared names, %d package dirs, %d literals (%d files)",
 		len(checked), len(universe.names), len(universe.dirs), len(universe.literals), universe.files)
@@ -118,8 +120,19 @@ type moduleUniverse struct {
 	files    int
 }
 
+// has reports whether the module uses this name at all, across the four forms a
+// table row may legitimately be naming.
+//
+// imports is the fourth, and it was added because this guard flagged a row it
+// should not have: `slktext`, the required alias for internal/text inside
+// internal/emoji (that package's own tests declare a package-level helper named
+// `text`, so a bare import breaks the test binary). An alias appears in no
+// declaration, no directory name and no string literal, yet it is unarguably a
+// name the module uses — and a row telling the reader which alias to write is
+// exactly the kind of thing these tables exist to carry. The skip rule already
+// consulted imports for qualifiers; resolution needed it too.
 func (u *moduleUniverse) has(name string) bool {
-	return u.names[name] || u.dirs[name] || u.literals[name]
+	return u.names[name] || u.dirs[name] || u.literals[name] || u.imports[name]
 }
 
 // agentsMDPredeclared are the predeclared identifiers a row may name as a type

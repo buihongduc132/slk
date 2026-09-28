@@ -3,6 +3,12 @@ package emoji
 import (
 	"sort"
 	"strings"
+
+	// Aliased: this package's tests declare a package-level helper named
+	// `text` (tokens_test.go), which would collide with the bare package
+	// name and break the test build. Follows the repo's `slk`-prefix
+	// aliasing convention (cf. slkemoji in internal/ui/reactionpicker).
+	slktext "github.com/gammons/slk/internal/text"
 )
 
 // placeholderGlyph is the single-cell stand-in for image-backed custom
@@ -30,7 +36,8 @@ type EmojiEntry struct {
 // standard-emoji codemap (iamcal-derived) plus the workspace's custom
 // emoji map (as returned by Slack's emoji.list, name -> URL-or-
 // "alias:target"). The result is deduped (custom shadows built-in) and
-// sorted alphabetically by name.
+// sorted alphabetically by name, case- and accent-insensitively via
+// text.Fold, with raw Name as a deterministic tie-break.
 //
 // Pass nil customs for built-ins only.
 func BuildEntries(customs map[string]string) []EmojiEntry {
@@ -65,7 +72,27 @@ func BuildEntries(customs map[string]string) []EmojiEntry {
 	for _, e := range byName {
 		out = append(out, e)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	// Sort on the folded name, not the raw bytes. Custom emoji names are
+	// user-supplied and mixed case occurs, and a raw byte comparison puts
+	// every uppercase ASCII letter ahead of every lowercase one, so
+	// :Rocket: would land before :apple: instead of beside :rocket:.
+	//
+	// The tie-break is a raw-Name comparison rather than sort.SliceStable:
+	// `out` is filled by ranging over a map, so "input order" is already
+	// randomized and stability with respect to it would still be
+	// nondeterministic. Name is a map key, hence unique, so (fold, Name) is
+	// a strict total order and the result is reproducible.
+	//
+	// text.Fold has an ASCII fast path that allocates nothing for
+	// already-lowercase names, which is every built-in (see
+	// entries_fold_sort_test.go).
+	sort.Slice(out, func(i, j int) bool {
+		fi, fj := slktext.Fold(out[i].Name), slktext.Fold(out[j].Name)
+		if fi != fj {
+			return fi < fj
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out
 }
 
