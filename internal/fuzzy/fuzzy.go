@@ -67,7 +67,7 @@ func SubsequenceScore(name, query string) (int, bool) {
 			}
 			qi++
 		}
-		prevWasSep = isSeparator(r)
+		prevWasSep = IsSeparator(r)
 	}
 	if qi < len(qrunes) {
 		return 0, false
@@ -80,7 +80,7 @@ func SubsequenceScore(name, query string) (int, bool) {
 	return score, true
 }
 
-func isSeparator(r rune) bool {
+func IsSeparator(r rune) bool {
 	switch r {
 	case '-', '_', '.', ' ', '/', ':':
 		return true
@@ -97,9 +97,11 @@ func WordPrefix(name, query string) bool {
 	if strings.HasPrefix(foldedName, foldedQuery) {
 		return false // whole-name prefix is not a word prefix
 	}
-	for _, sep := range []string{" ", "-", "_", "."} {
-		if strings.Contains(foldedName, sep+foldedQuery) {
-			return true
+	for i, r := range foldedName {
+		if IsSeparator(r) {
+			if strings.HasPrefix(foldedName[i+len(string(r)):], foldedQuery) {
+				return true
+			}
 		}
 	}
 	return false
@@ -119,7 +121,7 @@ func SquashedPrefix(name, query string) bool {
 	foldedName := text.Fold(name)
 	foldedQuery := text.Fold(query)
 	words := strings.FieldsFunc(foldedName, func(r rune) bool {
-		return r == ' ' || r == '-' || r == '_' || r == '.'
+		return IsSeparator(r)
 	})
 	if len(words) == 0 {
 		return false
