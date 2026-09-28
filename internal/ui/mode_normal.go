@@ -78,7 +78,26 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		// (e.g. focus on the sidebar): typing must land where the
 		// user can see it, not in a channel compose hidden behind
 		// the thread.
-		if a.focusedPanel == PanelThread || (a.view == ViewThreads && a.threadVisible) || a.threadDrawnAlone() {
+		//
+		// The Threads-view clause asks threadFocusable(), not the raw
+		// threadVisible it used to (B56). threadVisible consults neither
+		// focus nor drawn-ness, so the clause fired even while zoom had
+		// promoted a pane that is not the thread -- overriding
+		// normalizeZoomFocus, which had moved focus off that undrawn pane
+		// one keystroke earlier, and routing the keypress into a compose
+		// box with zero width in every frame. Measured at 200x30 in
+		// ViewThreads: MsgWidth=198 ThreadWidth=0, focus back on
+		// PanelThread, threadCompose holding text that is on no frame.
+		//
+		// threadFocusable is 1faa1fb's own predicate rather than a fourth
+		// notion of drawn-ness, and it already implies threadVisible, so
+		// this is a strict tightening of exactly that clause: unzoomed it
+		// reduces to threadVisible and nothing changes. The other two
+		// clauses are left alone -- threadDrawnAlone implies
+		// threadFocusable (drawn alone while zoomed requires
+		// zoomFrontIsThread), and the focus clause is kept unreachable in
+		// the bad state by the normaliser plus FocusNext/FocusPrev.
+		if a.focusedPanel == PanelThread || (a.view == ViewThreads && a.threadFocusable()) || a.threadDrawnAlone() {
 			a.focusedPanel = PanelThread
 			return a.threadCompose.Focus()
 		}
