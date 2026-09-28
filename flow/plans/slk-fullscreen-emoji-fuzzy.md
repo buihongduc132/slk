@@ -1941,3 +1941,29 @@ _(populated by gotcha-coverage + re-runs)_
     the `GOTOOLCHAIN=local` mistake: `/usr/bin/go` **must** be allowed to switch
     up, it just needs to be told which version to switch to.
 
+56. **CORRECTION: `capability-test.sh` has never reported "25/25". Its check
+    count is STATE-DEPENDENT, and I have been quoting a number it cannot
+    produce.** Two runs of the identical script against the identical binary,
+    minutes apart, reported **24 passed** and then **28 passed**.
+
+    **Why it moves.** Step 3 (`capability-test.sh:72-90`) inspects the *copied*
+    cache for the `custom_emoji` table. Present → four `ok` calls (the table plus
+    three column checks). Absent → one `info`, which increments nothing. The
+    deploy had just re-copied a live cache predating that migration, so run 1 saw
+    no table and scored 24; run 1's own TUI boot then wrote **399 rows** into the
+    dev cache, so run 2 saw the table and scored 28. Both runs are correct — the
+    section is labelled "informational only" and is designed to skip.
+
+    **The reporting error is mine.** 24 and 28 are the two real totals; **25 is
+    neither**, and I have cited "25/25" for this suite repeatedly, including in
+    item 54. A denominator that shifts with cached state is not a denominator, and
+    quoting `N/N` implies a fixed one.
+
+    **Generalises the item-54 lesson in the opposite direction.** Item 54 recorded
+    that the suite's 25 checks "carry no information about anything they do not
+    enter". This adds: the *count itself* carries no information either, so
+    "all N passed" is only ever a claim about the checks that chose to run. The
+    trustworthy report is `rc=0` plus the named checks — which is why the probes
+    print a verdict line and the gates print `GATE 0:`, and why this run is
+    recorded below as `rc=0, 28 PASS / 0 FAIL` rather than as a fraction.
+
