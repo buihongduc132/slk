@@ -842,3 +842,75 @@ _(populated by gotcha-coverage + re-runs)_
     `WorkspaceFinder` entry inflates the apparent suppression set (B54); and the
     suppression comment still argues for `toastWithClear`, which lane-toast
     deleted, directly above the `uploadToastCmd` call it now contradicts (B55).
+
+37. **B48 is closed in favour of the CODE (`d191a0d`), both halves, and closing
+    it found a third thing that is a real defect.** OT21 left this needing "the
+    user's contract decision" between rewriting fs-layout/fs-scope to match G15
+    and latching the zoomed pane at `enterZoom`. Decided: the code's contract
+    stands, the **plan text was the stale artefact**, and the prose became a test.
+    - **Why the code wins.** `zoomFrontIsThread`'s doc is not a post-hoc excuse;
+      it names the property it is protecting. Zoom promotes the thread exactly
+      when the unzoomed layout would have stacked and left the messages pane
+      undrawn, so "front" keeps the one meaning `threadInFront` already gave it.
+      Latching at `enterZoom` instead would reintroduce G15: the latched pane
+      would depend on where focus happened to be when `z` was pressed, so Tab
+      before `z` would change which pane zooms. Probing the unzoomed layout is
+      the thing that makes zoom's target a function of geometry, not history.
+    - **Measured, because OT21 asserted the widths and never stated them.** With
+      the shared fixture's 6-col rail and 30-col sidebar (+2 border), `Compute`'s
+      side-by-side branch first has room at **exactly 162 cols**: 161 stacks
+      (`msgEnd == sidebarEnd`, thread across the whole area), 162 draws both
+      (`msgEnd 80`, thread band 82). At 120 and 150 the panes stack; at 200 both
+      fit. So the report's "side-by-side widths" is everything from 162 up.
+    - **The check that replaces the prose**: `internal/ui/zoom_front_pane_test.go`
+      — both sides of the branch plus the 161/162 boundary pair, with focus held
+      on the thread through every row that discriminates, and the two orders
+      separated (focus-then-zoom here, zoom-then-Tab in `zoom_chord_tab_test.go`).
+      **Mutation**: `zoomFrontIsThread` → `a.threadVisible && a.focusedPanel ==
+      PanelThread` fails 3 of 6 subtests. Of the pre-existing suite that mutation
+      was caught by **one** golden subtest only
+      (`TestGolden_FullscreenFrames/messages_zoomed_with_thread_open_behind`), and
+      **not** by `TestFullscreen_TabWhileZoomedKeepsMessagesZoomed` — the row OT
+      F4 added for precisely this contract. A golden frame was the whole defence.
+    - **`windowBounds`' hardcoded `threadFront=false`: SAFE, documented at the
+      call site, not changed.** Two independent reasons, and they are not the same
+      reason. Unzoomed it *is* the contract — windows are only drawn when the
+      channel is in front, so the rect is always the channel-in-front area;
+      mutating it to `layoutThreadFront()` collapses the rect to `W=0` whenever a
+      stacked thread is in front and refuses every split with "Not enough room"
+      (fails the new row **and** `TestStacked_WindowSplitWithThreadInFront`).
+      Zoomed, it disagrees with the frame in exactly **one** state — stacked with
+      the thread promoted, where it returns `W=120` at 120×30 for a frame whose
+      `MsgWidth` is `0` — and that state is unreachable: both callers
+      (`splitWindow`, `navigateWindow`) sit behind the ctrl+w chord or `:sp`/`:vsp`,
+      `zoomSuppresses` swallows `WindowPrefix` and `CommandMode`, `enterZoom`
+      calls `disarmPendingChords`, and insert mode has no window-chord arm at all
+      (verified by driving `i` then ctrl+w then `v`: still one window). So OT21's
+      "reachable today by any non-key caller" is **refuted** — there is no such
+      caller.
+    - **This discharges the gap OT33 explicitly left open.** OT33 refuted B47's
+      first half by tracing the same suppression, then noted the property "lives
+      in `zoomSuppresses` plus a one-caller fact, and **nothing pins that fact**".
+      `internal/ui/window_bounds_zoom_test.go` now pins it, and pins it by
+      consequence rather than by restating the grep: delete `WindowPrefix` from
+      `zoomSuppresses` and a split really does reach `windowBounds` in the
+      divergent state (**mutation: `wins = 2`, want 1**). That failure is the
+      signal to make the argument live, which is the outcome OT33 asked for.
+    - **NEW DEFECT, found while measuring, NOT fixed here (raise separately per
+      AGENTS.md).** `threadDrawnAlone` is `threadDrawnAloneAt(a.zoomed)`, and
+      `threadDrawnAloneAt` builds its scratch frame from `a.threadInFront()` —
+      focus — while the real frame uses `layoutThreadFront()`, which resolves
+      through `zoomFrontIsThread` when zoomed. So at ≥162 cols, zoomed on
+      messages with focus on the thread, `threadDrawnAlone()` returns **true**
+      while the frame has `MsgWidth=198, ThreadWidth=0`. It is the same
+      focus-versus-resolved-layout error B48 wrongly alleged, in the sibling
+      helper, and it is **observable**: `mode_normal.go:81` consults it to decide
+      where `i` puts the cursor, so `i` then focuses the thread compose and the
+      typed character lands in `threadCompose` and **never appears on screen**
+      (measured: `threadCompose="X"`, `compose=""`, no `X` in the frame) — exactly
+      the failure that line's comment says it exists to prevent. The fix is
+      one argument (`threadDrawnAloneAt` taking the resolved front, or consulting
+      `layoutThreadFront`), but it changes behaviour, so it does not belong in
+      this commit. The other caller, `ToggleSidebar` (`app.go:2227`), is reached
+      by ctrl+b, which is suppressed while zoomed — so `mode_normal.go:81` is the
+      only reachable one.
