@@ -177,6 +177,9 @@ greppable by name; no line numbers, because these files move.
 | Hide the sidebar through the real `ctrl+b` path, asserting it went | `hideSidebar(t, a)` (same file). Only valid **unzoomed** — `ctrl+b` is in `zoomSuppresses`, so while zoomed it raises the toast and the sidebar stays put |
 | Every sidebar-hidden zoomed configuration, with the one pane its Tab ring must hold | `sidebarHiddenRings()` + `zoomedSidebarHiddenApp(t, tc)` (same file) |
 | Format a `uint8` for a hand-built SGR background code | `itoaU8(v)` + `fmtRGBBg(r, g, b)` — **declared four times**, byte-identical (`threadsview`'s copy is reformatted onto one line but is the same expression): `internal/ui/messages/model_test.go:1121,1135`, `internal/ui/thread/model_test.go:370,384`, `internal/ui/compose/model_test.go:943,960`, `internal/ui/threadsview/model_test.go:335,350`. Worse than any other "declared twice" row here, and not a simple delete: each is an unexported helper private to its own package, so consolidating means standing up a shared test-support package first, same shape as the `filteredNames`/`containsName` problem below |
+| Everything this module declares or mentions, for a doc-vs-code check | `newModuleUniverse(t, root)` → names / package dirs / string literals / import qualifiers (`internal/ui/agentsmd_registration_test.go`). Parses all 672 `.go` files in one pass, pruning nested `go.mod` dirs; `.has(name)` is the three-source lookup, `.resolvable(tok, all)` applies the skip rules |
+| Every backticked identifier in AGENTS.md's tables | `agentsMDTableTokens(t, root)` (same file) — table rows only, not prose |
+| Walk up to the directory holding `go.mod` | `agentsMDModuleRoot(t)` (same file) in `package ui`; `moduleRoot(t)` (`internal/ui/messages/clock_parallel_guard_test.go`) in `package messages`. **Declared twice** and not consolidatable — both are unexported, so neither is reachable from the other's package. A third package needing it should copy rather than export |
 | Type a string through the real key-`Update` loop | six independent helpers, none sharing a signature: `typeChars(t, m, s)` (`internal/ui/compose/model_test.go:468`), `typeText(m, s)` (`compose/channel_test.go:21`), `typeInto(t, c, s)` (`internal/ui/mode_insert_keys_test.go:71`), `typeIntoCompose(a, s)` (`compose_frecent_wiring_test.go:47`), `typeCommand(a, s)` (`mode_command_test.go:10`), `typeIntoFinder(a, s)` (`channel_finder_search_test.go:37`, returns the debounce messages fired). `mode_insert_keys_test.go` is a hash-pinned oracle — `typeInto` may be called or listed, but that file itself must not be edited |
 
 The `stripANSI` / `entriesFor` / `filteredNames` / `containsName` rows are the
@@ -187,6 +190,23 @@ noticed. Treat the "declared twice" notes as debt, not as license — the
 `filteredNames`/`containsName` pair sits inside the two packages this repo's
 fuzzy work set out to unify behind one matcher. `itoaU8`/`fmtRGBBg` is the same
 problem one level worse: four packages, not two.
+
+One half of that is now checked rather than asked for.
+`TestAGENTSMD_EveryTableRowNamesSomethingThatExists`
+(`internal/ui/agentsmd_registration_test.go`) fails if any backticked identifier
+in **any** table in this file — not just this section — no longer exists
+anywhere in the module. It resolves against declarations, package directory
+names and string literals, which is what lets a row legitimately name a
+production field (`threadVisible`), a package (`threadsview`) or an external
+binary (`pbcopy`). It covers 126 tokens today.
+
+It checks the direction that keeps the index honest, not the direction that
+caused the duplication. A row naming something deleted now fails; a *reusable
+helper that was never given a row* still passes, because "reusable" has no
+mechanical definition — deciding it would need a curated list of which of the
+module's 4,095 test-declared names deserve a row, which is the same
+hand-maintained artefact the check was meant to retire. That half stays with
+review, and with the rule at the top of Conventions.
 
 ### Known duplication — do not add to it
 
