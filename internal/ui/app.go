@@ -919,22 +919,52 @@ func (a *App) threadInFront() bool {
 // route a keypress to whichever content pane the user can actually see
 // — even while focus is elsewhere, such as the sidebar — consult this
 // instead of threadVisible alone.
+//
+// It must therefore answer for the frame that is actually DRAWN, which
+// means passing computeFrame's own threadFront argument —
+// layoutThreadFront() — and not the raw, focus-based threadInFront().
+// This used to pass threadInFront(), and the two diverge in exactly one
+// state: zoomed at a side-by-side width with the thread in front by
+// focus. There zoom promotes MESSAGES (see zoomFrontIsThread), so the
+// real frame has ThreadWidth == 0 — yet this reported true, "the thread
+// is the only pane on screen", about a pane with no width at all. The
+// `i` arm in mode_normal.go then focused threadCompose and the typed
+// character went into a box that is not on screen: silently lost,
+// the exact failure that call site exists to prevent. Reachable with no
+// seeded state by Enter, z, Tab (Tab walks PanelThread -> PanelSidebar
+// directly, so stackFront stays PanelThread and threadInFront() stays
+// true with focus on the sidebar).
+//
+// Pinned by internal/ui/zoom_insert_drawn_pane_test.go, which observes
+// the rendered frame and the two compose values rather than this
+// function's return.
 func (a *App) threadDrawnAlone() bool {
-	return a.threadDrawnAloneAt(a.zoomed)
+	return a.threadDrawnAloneAt(a.layoutThreadFront(), a.zoomed)
 }
 
 // threadDrawnAloneAt is threadDrawnAlone's parameterised form: it asks
-// the question against a hypothetical zoom state rather than the
-// current one. Split out because zoomFrontIsThread has to probe the
-// UNZOOMED layout, and calling threadDrawnAlone from there while
-// a.zoomed is already true would be self-referential.
-func (a *App) threadDrawnAloneAt(zoomed bool) bool {
+// the question against a hypothetical layout rather than the current
+// one. Both the front pane and the zoom state are parameters, so every
+// caller has to name the layout it means:
+//
+//   - threadDrawnAlone passes the RESOLVED front (layoutThreadFront)
+//     and the live zoom state — the frame on screen.
+//   - zoomFrontIsThread passes the focus-based front (threadInFront)
+//     and zoomed=false — the unzoomed layout, deliberately.
+//
+// zoomed stayed a parameter because zoomFrontIsThread has to probe the
+// unzoomed layout while a.zoomed may already be true. threadFront
+// became one for the same reason in the other direction: that probe
+// must keep using threadInFront(), so it cannot be folded into this
+// body, and leaving it implicit here is what let the caller above ask
+// about one layout and get the answer for another.
+func (a *App) threadDrawnAloneAt(threadFront, zoomed bool) bool {
 	if !a.threadVisible {
 		return false
 	}
 	var scratch panelLayout
 	frame := scratch.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),
-		a.sidebarVisible, a.threadVisible, a.threadInFront(), zoomed)
+		a.sidebarVisible, a.threadVisible, threadFront, zoomed)
 	return frame.MsgWidth == 0
 }
 
@@ -959,8 +989,15 @@ func (a *App) threadDrawnAloneAt(zoomed bool) bool {
 // what this function is for, so the report was closed in favour of the
 // code and the prose was replaced with the test. Mutating this body to
 // `a.threadVisible && a.focusedPanel == PanelThread` fails it.
+//
+// Both arguments are deliberate and neither may become
+// layoutThreadFront() / a.zoomed: this is the UNZOOMED, focus-based
+// probe that layoutThreadFront itself calls, so resolving either
+// through layoutThreadFront would be self-referential. The sibling
+// threadDrawnAlone passes the resolved front precisely because it is
+// asking the opposite question — what is on screen now.
 func (a *App) zoomFrontIsThread() bool {
-	return a.threadDrawnAloneAt(false)
+	return a.threadDrawnAloneAt(a.threadInFront(), false)
 }
 
 // layoutThreadFront is the threadFront argument every Compute call
