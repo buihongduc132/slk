@@ -165,8 +165,12 @@ greppable by name; no line numbers, because these files move.
 | Emoji fixtures filtered from the real codemap | `entriesFor(t, names...)` (`internal/ui/emojipicker/fuzzy_test.go`) |
 | Names of a picker's filtered rows | `filteredNames(m)` — **declared twice**, `emojipicker/fuzzy_test.go` (value receiver) and `reactionpicker/fuzzy_test.go` (pointer receiver). Unexported, so neither is reachable from the other; the signatures differ, so consolidating means moving both models' shared shape first |
 | Is a name among a picker's rows? | `containsName(names, want)` — **declared twice**, same two files, identical bodies |
+| Open the thread on the selected message, or open it and hand focus back to the channel pane | `openThread(t, a)`, `openThreadThenFocusMessages(t, a)` (`internal/ui/window_bounds_zoom_test.go`) — both drive real keys through the reducer chain, unlike `focusThreadPanel`, which assigns `threadVisible` directly |
+| Assert zoom is on with MESSAGES as the promoted pane | `assertZoomedPaneIsMessages(t, a, why)` (`internal/ui/zoom_front_pane_test.go`) |
+| The measured widths either side of the side-by-side layout branch | `stackedWidth` (120), `sideBySideWidth` (200), `firstSideBySideWidth` (162 — 161 stacks) (same file). With the shared fixture's 6-col rail and 30-col sidebar; re-measure if either changes |
 
-The last four rows are the registration B34 found missing: all eight helpers
+The `stripANSI` / `entriesFor` / `filteredNames` / `containsName` rows are the
+registration B34 found missing: all eight helpers
 existed and none were listed, which is precisely the condition this table exists
 to prevent. Three of them had already been written twice by the time anyone
 noticed. Treat the "declared twice" notes as debt, not as license — the
