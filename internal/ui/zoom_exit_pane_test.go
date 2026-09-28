@@ -201,3 +201,79 @@ func TestZoomExit_MessagesZoomedStillRestoresViewport(t *testing.T) {
 		t.Errorf("yOffset after exiting a MESSAGES zoom = %d, want the pre-zoom %d restored", got, preZoomYOff)
 	}
 }
+
+// TestZoomExit_MessagesZoomedUndoesAGWhileZoomed pins the OTHER arm of
+// exitZoom's stated contract. Its doc comment claims the restore undoes
+// "an autoscroll or a `G` that happened inside the zoomed pane"; the
+// test above pins the autoscroll arm only, driving the movement with an
+// inbound message. The two arms are not the same event:
+//
+//   - autoscroll is the CONTENT moving under the user, from
+//     messages.Model.AppendMessage;
+//   - `G` is the USER navigating deliberately, through
+//     a.keys.Bottom -> handleGoToBottom -> messagepane.GoToBottom.
+//
+// "Undo what the user just asked for" is the more surprising of the two
+// claims, and is the one a future author is likelier to talk themselves
+// out of, so the comment carrying it alone was the gap. `G` is also NOT
+// in zoomSuppresses -- verified in that function, which lists the layout
+// and navigation keys plus the workspace numbers -- so unlike ctrl+b it
+// genuinely reaches the pane while zoomed, and there is a real movement
+// here to undo.
+//
+// If this test ever fails, the question to settle FIRST is which of the
+// two is wrong: the contract or the code. This test asserts the
+// documented contract, not a preference.
+func TestZoomExit_MessagesZoomedUndoesAGWhileZoomed(t *testing.T) {
+	a := zoomExitApp(t)
+
+	if a.threadVisible {
+		t.Fatal("precondition: the fixture opened a thread; this case needs none")
+	}
+	assertFront(t, a, true, false)
+
+	preZoomSel := a.messagepane.SelectedIndex()
+	preZoomYOff := a.messagepane.YOffset()
+	if preZoomSel != 10 {
+		t.Fatalf("precondition: selection = %d, want 10 (the fixture's)", preZoomSel)
+	}
+
+	updateAndRender(t, a, keyPress('z'))
+	if !a.zoomed {
+		t.Fatal("precondition: 'z' did not enter zoom")
+	}
+	assertFront(t, a, true, false)
+
+	// G through the real reducer chain. The two existing G cases in
+	// mode_normal_keys_test.go go through runKeyCases, which calls
+	// dispatchModeKey directly and so bypasses reduceZoom entirely --
+	// neither of them can observe the suppression rule or the restore.
+	updateAndRender(t, a, keyPress('G'))
+
+	// Preconditions, not assertions: if G moved nothing, everything below
+	// passes trivially, which is how this test would rot into a tautology.
+	gSel := a.messagepane.SelectedIndex()
+	if gSel == preZoomSel {
+		t.Fatalf("precondition: G did not move the selection off %d -- either it was suppressed "+
+			"while zoomed (it is not in zoomSuppresses) or the fixture was already at the bottom", preZoomSel)
+	}
+	if got := a.messagepane.YOffset(); got == preZoomYOff {
+		t.Fatalf("precondition: G left yOffset at its pre-zoom value %d, so the restore is unobservable", preZoomYOff)
+	}
+
+	updateAndRender(t, a, keyCode(tea.KeyEscape))
+	if a.zoomed {
+		t.Fatal("precondition: esc did not exit zoom")
+	}
+
+	if got := a.messagepane.SelectedIndex(); got != preZoomSel {
+		t.Errorf("selection after exiting a MESSAGES zoom that a G moved = %d, want the pre-zoom %d: "+
+			"exitZoom's doc states the restore undoes \"an autoscroll or a G that happened inside the "+
+			"zoomed pane\". If the product now means to KEEP a deliberate G, change the doc and this "+
+			"test together -- do not let them disagree", got, preZoomSel)
+	}
+	if got := a.messagepane.YOffset(); got != preZoomYOff {
+		t.Errorf("yOffset after exiting a MESSAGES zoom that a G moved = %d, want the pre-zoom %d restored",
+			got, preZoomYOff)
+	}
+}
