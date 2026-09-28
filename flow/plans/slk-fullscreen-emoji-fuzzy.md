@@ -613,6 +613,35 @@ _(populated by gotcha-coverage + re-runs)_
     AGENTS.md: when this file and the code disagree, the code is right and the
     comment is the bug.
 
+35. **B50's premise is NOT established — "delete one" would be a guess, so the
+    code is unchanged.** The item says the zoom cache-key bit and
+    `invalidateZoomCaches` are "two mechanisms for one rule, delete one; whichever
+    is dead is the one fs-zoom-cache-keys' proof is anchored to". Traced, they
+    guard **different objects**:
+    - `invalidateZoomCaches` (`reducer_zoom.go:120`, called from three transition
+      sites) drops three things: every win-model's own cache, `thread.Model`'s
+      internal caches (`m.cache`, `m.viewCacheValid`, `m.chromeCacheValid`, via
+      `InvalidateCache` at `thread/model.go:292`), and `a.lastScreenValid`.
+    - the zoom bit lives in `threadLayoutKey`
+      (`view_thread.go:43`, `boolToInt(a.zoomed)<<2`), which keys the **App-level
+      `panelCache`** — a different cache from the model's own.
+    - So one is not a reimplementation of the other. And the screen memo is the
+      case no key can cover, which the existing doc comment already states: its
+      key is the panel strings, and "a zoom transition can produce a panel set
+      that compares equal to the stored one while the composite must differ
+      (G16)".
+    - **Verdict: no change.** Deleting either on the appendix's premise risks
+      precisely the stale-composite class G16 and B13 exist to prevent, and the
+      appendix itself flagged the mechanism as unverified. If this is pursued, the
+      question is empirical — remove one, drive a zoom transition, diff the frame —
+      not a reading exercise. Recorded per AGENTS.md: found while looking, raised
+      separately, not folded into unrelated work.
+    - Residual truth in the item: the **belt-and-braces overlap** is real, since
+      the win-model and thread caches are keyed on width/height which a zoom
+      transition already changes. That makes the explicit invalidation redundant
+      *for those two* but not for the screen memo. Tightening it would be a
+      readability change with a stale-frame downside and no measured upside.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
