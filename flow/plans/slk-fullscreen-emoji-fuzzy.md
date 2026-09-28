@@ -1797,3 +1797,56 @@ _(populated by gotcha-coverage + re-runs)_
     react binding (`mode=REACT`). That is the exact hazard I had only *reasoned*
     about when restructuring the pinned test in item 51. Never type words in
     normal mode in a test.
+
+
+54. **The toast is confirmed LIVE against the real workspace, and my probe was
+    wrong twice before it was right — both errors instructive.** New probe:
+    `~/.local/state/slkfz/probe-threads-toast.sh`.
+
+    **Discriminated.** Control built from `fe772e4` (single-string toast): the
+    zoom-remedy check **FAILS**, exit 1. Deployed `0239c10`: **10/10**, exit 0.
+
+    **`capability-test.sh` never enters the Threads view at all** — grepped, zero
+    references — so it reported 25/25 either side of this change too. That is the
+    **third** time this suite has been blind to a defect it appeared to cover
+    (B13, then the zoom-focus defect, now this). The pattern is settled: its 25
+    is a true count of what it checks and carries no information about anything
+    it does not enter.
+
+    **Probe bug 1: I assumed the wrong premise and nearly filed it as a defect.**
+    My first draft pressed `i` on entry expecting the "no thread open" remedy,
+    and reported 2 failures. The frames refuted the probe, not the code: the
+    status row read `#… > Thread` and the right pane showed `3 replies · last
+    by …`. **Entering the Threads view AUTO-PREVIEWS** the highlighted row's
+    thread — the spec says so explicitly ("as `j/k` moves the cursor, the right
+    panel updates to show that thread's replies"). So `threadVisible` is TRUE on
+    entry, a reply box IS drawn, and `i` being accepted there is correct.
+
+    **A fixture/production divergence that falls out of it, worth keeping.** The
+    unit fixture `withView(ViewThreads)` does NOT auto-preview, so the
+    `!threadVisible` rows in `TestInsertMode_ThreadsView` describe a state the
+    live sidebar path does not produce when threads exist. Both are real states
+    of the code — the branch is reachable with an empty threads list — but a
+    workspace with 11 threads cannot reach it, so only the zoom remedy is
+    probeable live here. A unit fixture that skips a production entry path can
+    make a branch look more reachable than it is.
+
+    **Probe bug 2: I captured after the toast expired and nearly concluded my own
+    fix was broken.** The toast lives `2*time.Second`; I slept **3** before
+    capturing. The frame showed the keystroke correctly refused — not in insert
+    mode, wrong remedy absent — with no toast anywhere, which reads exactly like
+    "refused silently", the defect class this change exists to close. I had
+    already started diagnosing it as my toast reaching an undrawn row. Capturing
+    at 1s shows the toast present. **A disappearing-by-design observable needs its
+    lifetime respected, or absence is unreadable.** The unzoomed
+    "no spurious toast" check was re-verified at 1s too, so it is not passing
+    vacuously by expiry.
+
+    **One thing I checked rather than assumed while chasing bug 2:**
+    `overlayZoomToast` is **generic** — it paints `a.statusbar.Toast()` onto the
+    zoomed frame's last row for ANY toast, not only the suppression one. So B45's
+    mechanism carries this toast for free, and the zoomed frame genuinely does
+    show it. Had it been specific to the suppression path, this toast would have
+    been invisible while zoomed and the unit tests would not have caught it,
+    because `statusbarText(a)` renders the statusbar model in isolation — the
+    exact blind spot B45's own comment documents.
