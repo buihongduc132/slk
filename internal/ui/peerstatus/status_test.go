@@ -50,7 +50,7 @@ func TestInDND(t *testing.T) {
 func TestSummary(t *testing.T) {
 	end := testNow.Add(time.Hour)
 	st := Status{Emoji: ":calendar:", Text: "In a meeting", DND: true, DNDEnd: end}
-	want := emoji.CodeMap()[":calendar:"] + " In a meeting · " + DNDGlyph + " Do not disturb until " + end.Local().Format("15:04")
+	want := emoji.CodeMap()[":calendar:"] + " In a meeting · " + DNDGlyph + " Do not disturb until " + end.In(testNow.Location()).Format("15:04")
 	if got := st.Summary(testNow, "15:04"); got != want {
 		t.Errorf("Summary = %q; want %q", got, want)
 	}

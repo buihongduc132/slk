@@ -131,7 +131,7 @@ func (s Status) Summary(now time.Time, layout string) string {
 	if s.InDND(now) {
 		dnd := DNDGlyph + " Do not disturb"
 		if !s.DNDEnd.IsZero() {
-			dnd += " until " + s.DNDEnd.Local().Format(layout)
+			dnd += " until " + s.DNDEnd.In(now.Location()).Format(layout)
 		}
 		parts = append(parts, dnd)
 	}
