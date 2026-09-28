@@ -1171,3 +1171,110 @@ _(populated by gotcha-coverage + re-runs)_
     Any future agent worktree must be based on local `main`, not
     `origin/main`, or it will investigate a tree that is missing the feature it
     was sent to extend.
+
+
+41. **B49 is closed (`2727a6d`): the zoom viewport restore is now scoped to the
+    pane zoom actually promoted.** `exitZoom` restored the messages viewport
+    unconditionally, so zooming a THREAD and leaving moved a messages viewport
+    the user never touched.
+
+    **The fix records rather than recomputes, and the reason is measured.** A
+    new `zoomSavedMsgViewport bool` is written at `enterZoom` and read at
+    `exitZoom`, instead of `exitZoom` asking `zoomFrontIsThread` which pane had
+    been promoted. That looks like redundant state until you press Tab: while
+    zoomed at a stacked width, Tab flips which pane is in front, and
+    `zoomFrontIsThread` answers for the CURRENT front, not the one zoom
+    promoted. Measured at width 120, across successive Tabs it returns
+    `true → false → true`. Recomputing at `exitZoom` would therefore restore
+    the wrong pane for any user who Tabbed while zoomed — the exact class of
+    bug B49 is. The flag is written unconditionally on every entry so a
+    previous zoom's answer can never be read as this one's.
+
+    **This did not need B15's pane hooks after all.** The B49–B55 diagnosis
+    (item 26) ranked it "Rank 3 — and it needs B15's pane hooks to fix
+    properly". That was wrong about the dependency: the restore is a
+    two-field snapshot plus a boolean, and scoping it needs no shared pane
+    abstraction. B15 would make it tidier, not possible. Recorded because the
+    same "blocked on a refactor" reasoning is in this document about other
+    items and should be re-checked rather than inherited.
+
+
+42. **The `threadDrawnAlone` defect from item 34 is closed (`5b1ff62`), and my
+    claim that closing it would fix the keystroke loss was WRONG.**
+    `threadDrawnAlone` was `threadDrawnAloneAt(a.zoomed)`, and the helper built
+    its scratch frame from `a.threadInFront()` — so it answered about a frame
+    the renderer was not drawing. The fix makes the front an explicit
+    parameter: `threadDrawnAloneAt(threadFront, zoomed bool)`, called as
+    `threadDrawnAloneAt(a.layoutThreadFront(), a.zoomed)` from the live path and
+    `threadDrawnAloneAt(a.threadInFront(), false)` from the other caller. No
+    caller now gets an answer about a hypothetical frame.
+
+    **The correction matters more than the fix.** I told the user this lane
+    would fix the observable keystroke loss. It did not. Measured after
+    merging: at 200×30 with the thread focused, `z` then `i` then text still put
+    the text in `threadCompose`, still absent from the frame. The helper was
+    one of THREE inputs to that symptom; the other two were `enterZoom` leaving
+    focus on an undrawn pane (item 43) and `mode_normal.go:81`'s second clause
+    (still live, item 43). Fixing a helper that feeds a symptom is not fixing
+    the symptom, and the only way I found that out was re-measuring the
+    original repro rather than trusting the lane's own green gates.
+
+
+43. **The keystroke loss is CLOSED (`1faa1fb`, merged as `55e6b87`) — but a
+    third, narrower instance of it is still LIVE and needs a product
+    decision.** `enterZoom` left `a.focusedPanel` pointing at a pane zoom does
+    not draw, so `mode_normal.go`'s insert arm routed typing into a compose box
+    of zero width that is never rendered. The text went nowhere the user could
+    see.
+
+    **Fixed as one predicate pair, not eight routing sites.**
+    `threadFocusable` / `messagesFocusable` in `reducer_zoom.go`, with
+    `normalizeZoomFocus` applied at `enterZoom` and at the point a thread opens.
+    Eight sites route a keypress or a paste on `focusedPanel == PanelThread`;
+    making the invalid state unreachable keeps all eight correct without any of
+    them learning that zoom exists. Tab drops the undrawn pane from the ring
+    rather than landing on it and being corrected afterwards, which would have
+    turned that keypress into a visible no-op. `exitZoom` hands the focus back,
+    but GUARDED — only while focus is still where the normaliser parked it, so
+    a deliberate Tab away outranks the undo.
+
+    **TWO edges, not one.** A thread opened while ALREADY zoomed never runs
+    `enterZoom`, so an `enterZoom`-only fix would have left that half broken.
+    Both measured here: `z` then type → `compose="wombat"`, in frame; `z`, then
+    open the thread, then type → `compose="gerbil"`, in frame.
+
+    **G15 is untouched.** `zoomFrontIsThread` is the oracle the new predicates
+    call; it answers without reading `a.zoomed`, so it cannot feed back into
+    itself, and `zoom_front_pane_test.go` passes unchanged.
+
+    **One golden re-blessed, and I checked it rather than taking it on trust.**
+    `testdata/golden/fullscreen_messages_zoomed.ansi`: plain text byte-identical
+    after normalising box-drawing glyphs, verified programmatically. THREE
+    visual things changed, not the single border change the lane's report
+    described — border glyph and colour, selected-row background
+    (`43;43;60` → `34;52;57`, unfocused → focused) and the selection marker
+    foreground (green `80;200;120` appears). All three express one fact: the
+    messages pane went from unfocused to focused. The OLD golden had recorded
+    the only pane on screen drawn as unfocused, i.e. it had captured the
+    defect, so re-blessing is correct. A re-blessed golden whose diff is
+    explained by one sentence about state is a fix; one that needs three
+    unrelated sentences is usually a regression.
+
+    **STILL LIVE, reproduced independently, NOT fixed here.** In the Threads
+    view, zoomed, at a side-by-side width, `i` still strands the keystroke:
+    `view=1 Msg=198 Thread=0 focus=3 | threadCompose="badger" in-frame=false`.
+    `mode_normal.go:81` ORs three clauses and the second,
+    `a.view == ViewThreads && a.threadVisible`, consults neither focus nor
+    drawn-ness, so it overrides the normaliser immediately. **DECISION NEEDED:**
+    what should `i` do when the promoted pane is the threads LIST, which has no
+    compose box of its own? Three candidates — focus the thread reply box
+    anyway and let zoom un-promote the list; make `i` a no-op with a toast; or
+    treat the list as non-insertable and fall through to the messages compose.
+    This is a product question, so it is recorded rather than decided.
+
+    **A note on my own repro, which was wrong the first time.**
+    `withThreadsView(nil)` does NOT set the view — my first attempt ran with
+    `view=0` and so tested the normal view twice, concluding the defect did not
+    exist. `withView(ViewThreads)` is required alongside it. Any future
+    Threads-view repro in this package must assert `a.view` before asserting
+    anything else.
