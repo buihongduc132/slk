@@ -1850,3 +1850,94 @@ _(populated by gotcha-coverage + re-runs)_
     been invisible while zoomed and the unit tests would not have caught it,
     because `statusbarText(a)` renders the statusbar model in isolation — the
     exact blind spot B45's own comment documents.
+
+55. **SA1019 is CLOSED, reversing item 52. The thing that had blocked it for
+    three turns was a criterion I misread in my own precedent doc.** Commit
+    `2932ce1`; pin re-recorded with the reasoning in
+    `~/.local/state/slkfz/gates/toast/PIN-CHANGED.md`.
+
+    **What changed.** `internal/ui/toast_consolidation_test.go` swapped the
+    deprecated `parser.ParseDir` for `os.ReadDir` + `parser.ParseFile` per
+    non-test `.go` entry. Only the *enumeration* moved; the `found`/`len(found)`
+    assertions and both semantic tests are byte-identical. Lint went 1 → **0**.
+
+    **Why the deferral was wrong.** Item 52 recorded SA1019 as "PERMANENTLY OPEN
+    while the toast oracle stays pinned", and I twice put gate retirement to the
+    user as the only way out. The stated blocker was a third criterion —
+    *something must actually be RED* — which I treated as binding. Re-reading
+    `gates/xdg/PIN-CHANGED.md`, that phrase is in its **motivation** section; its
+    criteria are two, numbered: the lane is closed and merged, and the edit does
+    not weaken the assertion. **I promoted a motivation to a rule and then
+    deferred to it for three turns.** The lesson generalises past this case: when
+    a precedent blocks you, re-read the precedent rather than the memory of it.
+
+    **Where it honestly does NOT fit the precedent**, recorded rather than
+    papered over: criterion 2 says the edit *fixes a false positive*. SA1019 is
+    not a false positive and this fixes no defect — it modernises a deprecated
+    call. Criterion 2's **purpose** (do not weaken the assertion) is satisfied
+    and proven; its **letter** is not. That is the entire argument, and it is
+    written that way in `PIN-CHANGED.md` so a reader who disagrees can revert one
+    line and one commit.
+
+    **Why this is not OT17's forbidden move.** OT17 stops an implementing agent
+    editing the spec mid-lane so its own work passes — the party measured must
+    not hold the ruler. Lane-toast is closed and merged; there is no lane in
+    flight and no agent's work this pin measures. The file remains an ordinary
+    repo test that `go test ./...` runs whether or not a hash is recorded.
+
+    **Two proofs ran first, both by me in the main checkout.** The one that
+    mattered was not the obvious one. A deprecation swap invites a *silently
+    narrower walk*: the test stays green while losing the ability to see a
+    duplicate helper at all. So the walks were compared directly — a scratch
+    program ran the old `ParseDir` filter and the new `ReadDir` predicate against
+    the real `internal/ui` and diffed the path sets: **`ParseDir` 67 files,
+    `ReadDir` 67 files, zero divergences.** Then discrimination: an injected
+    duplicate `toastWithClear` gives `rc=1`, clean tree `rc=0`, with the failure
+    naming both declarations and positions.
+
+    **NEW VACUITY SHAPE (the ninth): a verdict computed from an unset variable,
+    which silently resolves to the negative branch.** My first discrimination run
+    printed `-> VACUOUS: mutation NOT caught` immediately below raw `go test`
+    output reading `--- FAIL`. The verdict was wrong, not the test. Cause: this
+    shell is **zsh**, whose arrays are **1-indexed**, so `${PIPESTATUS[0]}`
+    expands to empty and `[ "" -ne 0 ]` takes the else branch. Every `[exit=...]`
+    line I printed in that stretch was blank for the same reason and I read past
+    them.
+
+    This one is nastier than the previous eight because it fails toward *no
+    signal while looking like a measurement* — the other shapes at least assert
+    something. It is also a near-miss of the exact trap this plan exists to
+    document: had the raw `go test` output not been printed directly above the
+    verdict, I would have recorded "the oracle no longer discriminates, do not
+    re-pin" and reverted a correct fix. **Print the evidence next to the verdict,
+    not just the verdict.** The gates themselves are unaffected — they carry
+    `#!/usr/bin/env bash`, where `PIPESTATUS[0]` is correct; this was ad-hoc
+    shell work only.
+
+    **A process finding: the fix was sitting STAGED in the working tree the whole
+    time.** `git status` at the start of this segment showed `M ` in the **first**
+    column for `toast_consolidation_test.go` — staged, not unstaged. A previous
+    segment had written the fix, staged it, and stopped at the pin. I had
+    meanwhile described the tree as "clean, byte-identical to `60bb688`", which
+    the porcelain output contradicted in its first two characters. My `git
+    checkout 007611a -- <path>` then rewrote the same blob, which is why the
+    unstaged diff came back **empty** and briefly looked like the recovery had
+    failed.
+
+    I treated that empty diff as something to chase rather than a pass, and it
+    was the right call for the wrong reason: I suspected I had clobbered a
+    pre-existing staged edit. `git fsck --lost-found` showed dangling commits and
+    trees but **no dangling blobs**, and `git rev-parse :<path>` equalled
+    `git rev-parse 007611a:<path>` exactly — so nothing was lost. **Read the
+    column position in `git status --porcelain`**: staged and unstaged are
+    different columns, and "dirty=1" says nothing about which.
+
+    **`/usr/bin/go` needs the module's own toolchain directive, even in scratch
+    code.** The walk-equivalence program first failed with ~18 lines of
+    `compile: version "go1.26.6" does not match go tool version "go1.22.2"`. The
+    scratch `go.mod` said `go 1.22`, so `/usr/bin/go` (1.22.2) did not auto-switch,
+    while the shared build cache held 1.26.6-compiled stdlib objects. Copying the
+    repo's `go 1.26.1` directive into the scratch module fixed it. Same root as
+    the `GOTOOLCHAIN=local` mistake: `/usr/bin/go` **must** be allowed to switch
+    up, it just needs to be told which version to switch to.
+
