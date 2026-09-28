@@ -2146,3 +2146,72 @@ _(populated by gotcha-coverage + re-runs)_
     behaviour — the audit used them interchangeably and that is where its ranking
     went wrong.
 
+59. **The hygiene lane's three fixes are INDEPENDENTLY VERIFIED, each by a
+    discriminating control I ran myself — and FIX 3's verification corrected my
+    own item-58 reasoning about *why* that leak is latent.**
+
+    Branch `slkfz/hygiene`: `d80da00` (env leak), `9a343ea` (`t.Helper()` ×7),
+    `765f473` (theme `t.Cleanup`). None of the ten pinned oracles is touched.
+
+    **FIX 1 — env leak, three controls.** (A) My original probe against the fixed
+    tree: `rc=0`, where the same probe gave `rc=1` before. (B) Mutation: removing
+    the arming `t.Setenv` from the lane's new guard makes it FAIL, naming the
+    leaked variable. (C) Unmutated: `rc=0`. The guard's mechanism is sound and
+    not a proxy — it seeds its own var with plain `os.Setenv` (so nothing
+    auto-restores it), then exploits the fact that a subtest's `t.Setenv` cleanup
+    fires when *that subtest* returns, letting a sibling subtest observe the leak.
+
+    **FIX 2 — `t.Helper()`, demonstrated for the first time by either of us.** The
+    lane said plainly in its own commit message that a passing run "does not by
+    itself demonstrate the attribution fix," which was honest and correct. So I
+    forced a `Fatalf` inside `openHelp` and read the attributed location:
+
+    - **with** `t.Helper()` → `modekeys_test.go:336` (the caller)
+    - **without** → `mode_help_test.go:16` (the helper's own line)
+
+    A real, observable difference. Also worth recording: `openPresenceMenu` was
+    the one I flagged as possibly unfixable, because its signature is
+    `(calls *[]statusCall, withSetter bool)` with no `*testing.T`. It returns
+    `func(*testing.T, *App)`, so `t.Helper()` belongs inside the returned closure,
+    operating on the closure's own `t`. My concern was unfounded and the lane
+    resolved it correctly.
+
+    **FIX 3 — the leak is real, and I now know exactly why item 58 could not see
+    it.** First attempt at a probe: a `zzz_`-prefixed file, which compiles last
+    and therefore runs last. Both pre- and post-fix trees passed, showing no
+    discrimination. That was **my probe design being wrong**, not a null result —
+    and I nearly filed it as one.
+
+    Cause, measured: `blockkit_background_test.go` applies `"nord"` (4 sites, no
+    cleanup pre-fix), but `highlight_test.go`, `model_test.go` and `render_test.go`
+    each apply a theme **and** register `t.Cleanup(… Apply("dark") …)`. Those
+    files sort after `blockkit_background` (b < h < m < r), so their cleanups
+    restore dark before any last-position probe can look. **A probe placed last is
+    in the one position guaranteed to see nothing.**
+
+    Re-run with the probe in a filename sorting strictly between them —
+    `bzz_theme_probe_test.go`, since `bzz` > `blockkit_background` ('l' < 'z') and
+    `bzz` < `highlight` ('b' < 'h'):
+
+    - **pre-fix:** `LEAK ambient==nord {163 190 140 255}` want dark
+      `{80 200 120 255}` — `rc=1`
+    - **post-fix:** `OK ambient==dark {80 200 120 255}` — `rc=0`
+    - probe confirmed present in the RUN list in both trees, and a
+      `dark == nord` control guards against a blind comparison
+
+    **So item 58's verdict holds but its reason was incomplete.** "Nothing reads
+    the leaked theme" was wrong; the correct statement is **"later tests repair it
+    by accident of filename order."** That is a materially different claim — the
+    first says the leak is inert, the second says it is *masked by coincidence*,
+    and a renamed or deleted test file would unmask it. The fix is therefore worth
+    more than item 58 credited, while the audit's "currently-live ordering hazard"
+    framing is still wrong.
+
+    **The transferable lesson, and it is about probe placement, not about themes.**
+    For a process-global that many tests both write and restore, *where* the
+    observer sits determines what it can see, and the intuitive choice — last —
+    is the blindest one. Put the probe in the **narrowest window between the write
+    and the next repair**, and prove the probe ran there. Related: item 54's
+    "disappearing-by-design observable checked after its lifetime expires" is the
+    same error in the time dimension; this is its ordering-dimension twin.
+
