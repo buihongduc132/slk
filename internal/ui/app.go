@@ -160,6 +160,15 @@ type App struct {
 	// restore onto whichever pane the answer had drifted to. See
 	// enterZoom (B49).
 	zoomSavedMsgViewport bool
+	// zoomSavedThreadFocus records that zoom took focus OFF the thread
+	// pane because zoom does not draw it (normalizeZoomFocus), so the
+	// user-initiated exit can hand it back. Paired with its restore in
+	// exitZoom exactly as zoomSavedMsgViewport is, and for the same
+	// reason: the answer to "was focus moved?" must be recorded at the
+	// moment of the move, not recomputed on the way out, when Tab may
+	// have changed it. clearZoom deliberately does not restore -- see
+	// normalizeZoomFocus.
+	zoomSavedThreadFocus bool
 
 	// cmdline accumulates the text typed at the vi-style ':' prompt
 	// while in ModeCommand. Owned by mode_command.go; always "" in
@@ -2112,6 +2121,11 @@ func (a *App) openThreadPanel(parent messages.MessageItem, channelID, threadTS s
 	a.threadVisible = true
 	a.statusbar.SetInThread(true)
 	a.focusedPanel = PanelThread
+	// A thread opened while already zoomed on the messages pane is not
+	// drawn, so focus must not stay on it: this path never runs enterZoom,
+	// which is why the normaliser is called from both edges. No-op when
+	// unzoomed and when zoom promotes the thread. See normalizeZoomFocus.
+	a.normalizeZoomFocus()
 	a.threadPanel.SetThread(parent, nil, channelID, threadTS)
 	a.threadCompose.SetChannel(a.threadComposeChannelName(channelID))
 	a.applyThreadBreadcrumb(channelID, "")
@@ -2212,24 +2226,45 @@ func (a *App) clearSelections() {
 	a.threadPanel.ClearSelection()
 }
 
+// FocusNext / FocusPrev walk the focus ring. Every step into a content
+// pane is gated on threadFocusable / messagesFocusable (reducer_zoom.go)
+// rather than on threadVisible alone, so while zoomed the pane zoom does
+// not draw is dropped from the ring instead of being landed on. Unzoomed
+// both predicates reduce to the visibility test these switches used
+// before, so the ring is unchanged there.
+//
+// Dropping it from the ring rather than correcting focus afterwards is
+// deliberate: a correction would make that Tab press a visible no-op —
+// swallowing a keystroke to fix a swallowed keystroke. Measured at 200x30
+// before this change, Tab cycled thread → sidebar → messages → thread and
+// the third press put focus back on the undrawn thread with zoom still
+// promoting messages; the ring is now sidebar ⇄ messages there, and
+// sidebar ⇄ thread at a stacked width, so which pane zoom promotes cannot
+// change under Tab at any width (G15).
 func (a *App) FocusNext() {
 	a.cancelEdit()
 	a.clearSelections()
 	if !a.sidebarVisible {
-		if a.threadVisible {
-			if a.focusedPanel == PanelMessages {
+		if a.focusedPanel == PanelMessages {
+			if a.threadFocusable() {
 				a.focusedPanel = PanelThread
-			} else {
-				a.focusedPanel = PanelMessages
 			}
+		} else if a.messagesFocusable() {
+			a.focusedPanel = PanelMessages
 		}
 		return
 	}
 	switch a.focusedPanel {
 	case PanelSidebar:
-		a.focusedPanel = PanelMessages
+		// messagesFocusable is false only while zoomed with the thread
+		// promoted, and then the thread is the one pane drawn.
+		if a.messagesFocusable() {
+			a.focusedPanel = PanelMessages
+		} else if a.threadFocusable() {
+			a.focusedPanel = PanelThread
+		}
 	case PanelMessages:
-		if a.threadVisible {
+		if a.threadFocusable() {
 			a.focusedPanel = PanelThread
 		} else {
 			a.focusedPanel = PanelSidebar
@@ -2243,26 +2278,30 @@ func (a *App) FocusPrev() {
 	a.cancelEdit()
 	a.clearSelections()
 	if !a.sidebarVisible {
-		if a.threadVisible {
-			if a.focusedPanel == PanelThread {
+		if a.focusedPanel == PanelThread {
+			if a.messagesFocusable() {
 				a.focusedPanel = PanelMessages
-			} else {
-				a.focusedPanel = PanelThread
 			}
+		} else if a.threadFocusable() {
+			a.focusedPanel = PanelThread
 		}
 		return
 	}
 	switch a.focusedPanel {
 	case PanelSidebar:
-		if a.threadVisible {
+		if a.threadFocusable() {
 			a.focusedPanel = PanelThread
-		} else {
+		} else if a.messagesFocusable() {
 			a.focusedPanel = PanelMessages
 		}
 	case PanelMessages:
 		a.focusedPanel = PanelSidebar
 	case PanelThread:
-		a.focusedPanel = PanelMessages
+		if a.messagesFocusable() {
+			a.focusedPanel = PanelMessages
+		} else {
+			a.focusedPanel = PanelSidebar
+		}
 	}
 }
 
