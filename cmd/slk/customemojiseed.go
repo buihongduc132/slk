@@ -55,7 +55,8 @@ func seedCustomEmojiFromCache(wctx *WorkspaceContext, db *cache.DB, teamID strin
 //
 // Best-effort: on error nothing is published and nothing is sent, so the
 // bootstrap subset (or the cache seed, or the built-ins) stays in place rather
-// than being cleared.
+// than being cleared. An EMPTY success is treated the same way, for the reason
+// below.
 //
 // Intended to be run in a goroutine, AFTER WorkspaceReadyMsg, so it never
 // blocks first paint. The seed above is the part that must precede the message;
@@ -63,6 +64,35 @@ func seedCustomEmojiFromCache(wctx *WorkspaceContext, db *cache.DB, teamID strin
 func fetchWorkspaceEmojiIntoCache(ctx context.Context, wctx *WorkspaceContext, client customEmojiLister, sender teaSender, teamID string, db *cache.DB) {
 	emojis, err := client.ListCustomEmoji(ctx)
 	if err != nil {
+		return
+	}
+	// An empty SUCCESS is "no news", not "the workspace has no custom emoji"
+	// (B37). Slack documents `{"ok": true}` as a minimal success body; an absent
+	// `emoji` field decodes to a nil map with a nil error, and ListCustomEmoji
+	// normalises that nil to an empty map (internal/slack/client.go) — still a
+	// nil error. Gating only on `err != nil` therefore lets a bodyless success
+	// through to db.UpsertCustomEmoji, which is a wholesale replace (DELETE the
+	// team's rows, INSERT the argument), so it EMPTIES the team's cached set.
+	// The next cold start then seeds nothing and every custom emoji in the
+	// workspace renders as literal `:name:`.
+	//
+	// The asymmetry decides it. Skipping the write when an admin really did
+	// delete every custom emoji leaves one stale set until the next fetch: a few
+	// dead shortcodes. Honouring a spurious empty destroys a known-good set. And
+	// a workspace that genuinely has none is unaffected — its cache is already
+	// empty, so the skipped write was a no-op, and CustomEmoji() returns
+	// empty-non-nil through the accessor regardless.
+	//
+	// Scoped to EMPTY deliberately. B37 originally alleged a TRUNCATED page
+	// overwriting a full cache; that mechanism does not exist, because
+	// emoji.list does not page (no cursor/limit/has_more in the method, and
+	// customEmojiLister returns a bare map — a partial page is unrepresentable).
+	// So there is no "implausibly smaller" case to defend against, and a ratio
+	// heuristic would only misfire on legitimate bulk deletions.
+	//
+	// Same trap and same answer as the seed's emptiness check above (B17), one
+	// layer out.
+	if len(emojis) == 0 {
 		return
 	}
 	wctx.SetCustomEmoji(emojis)
