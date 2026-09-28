@@ -181,12 +181,25 @@ var reduceZoom reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 	// deleted it and preserved its body as the toastEager mode, so the comment
 	// was arguing against the call directly beneath it (B55).
 	//
-	// KNOWN DEFECT, do not read this as working: while zoomed, nothing
-	// composites the status row (app.go:3384-3386 sets status := ""), so this
-	// toast is INVISIBLE and every suppressed key is a silent no-op. B45 in
-	// flow/plans/slk-fullscreen-emoji-fuzzy-gotcha-batch4.md; the existing
-	// oracle cannot see it because statusbarText(a) reads the statusbar MODEL,
-	// whose field is set unconditionally.
+	// FIXED (B45). This comment used to say the toast was INVISIBLE and every
+	// suppressed key a silent no-op. The premise still holds -- app.go's
+	// compositor sets `status := ""` while zoomed, so the status ROW is not
+	// composited -- but the conclusion no longer does: App.overlayZoomToast
+	// (view_status.go:61) paints the live toast onto the last row of the
+	// composed zoomed frame, which is the pane's bottom border, so it costs no
+	// content row and forces no reflow. The screen memo keys on the toast text
+	// while zoomed (app.go), without which the memo would serve a stale frame
+	// and the toast would still never appear.
+	//
+	// Pinned by internal/ui/zoom_toast_visible_test.go, which asserts on
+	// stripANSI(a.View().Content) and never on statusbarText(a) -- reading the
+	// statusbar MODEL is what let the original defect hide, since that field is
+	// set unconditionally whether or not anything renders it.
+	//
+	// Left as a comment rather than deleted because "the toast is invisible" was
+	// a load-bearing belief in four places in the plan, and the next person to
+	// read this line should see that it was measured and fixed, not merely
+	// assumed away.
 	if a.zoomSuppresses(km) {
 		return a.uploadToastCmd(zoomSuppressedToast, zoomToastDuration, toastEager), true
 	}

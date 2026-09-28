@@ -563,6 +563,56 @@ _(populated by gotcha-coverage + re-runs)_
       twice" is a claim about names. Whether the two *bodies agree* is a separate
       question, and it was the interesting one in all three cases.
 
+33. **B47's first half is REFUTED, and B51's is unsupported for a reason worth
+    recording. Neither needs a lane.** Both were carried as "unverified"; this
+    discharges them.
+    - **B47 — `:sp/:vsp/:only/:q` while zoomed: NOT REACHABLE, so not a defect.**
+      The observation was right — `internal/ui/command.go` contains **zero**
+      zoom references and those four map straight to `cmdSplit`, `cmdVSplit`,
+      `cmdCloseWindow`, `cmdOnlyWindow`. But the inference was wrong. Traced:
+      `enterCommandMode` has exactly **one** caller, `mode_normal.go:89`, the `:`
+      binding; `:` is `a.keys.CommandMode`, which is in `zoomSuppresses`; and the
+      suppression returns `handled=true` from the reducer, so the key never
+      reaches the mode table at all. While zoomed there is **no door into command
+      mode**, therefore no way to type `:sp`. `command.go` needing no zoom
+      awareness is correct-by-construction, not an omission.
+      - This is only true while `:` is the sole entry. A future palette, keymap
+        or mouse affordance that enters command mode another way reopens it
+        immediately — the property lives in `zoomSuppresses` plus a one-caller
+        fact, and nothing pins that fact. Worth a structural guard if command
+        mode ever grows a second entry point.
+      - B47's **second** half (`windowBounds` passing a hardcoded
+        `threadFront=false` alongside a live `a.zoomed`) is untouched by this and
+        remains open under B48/OT21, which needs the user's contract decision.
+    - **B51 — `sixelpaint.go` has no zoom awareness, and should not have any.**
+      The count is right: one match in 121 lines, and it is in a *comment*. But
+      the paint function takes `rect` and `chromeHeight` **as parameters** and
+      computes `contentTop := rect.Y + 1 + chromeHeight`, i.e. every coordinate
+      is relative to the pane it was handed. It inherits zoom-corrected geometry
+      from its caller rather than deriving any, and its own comment says so:
+      guards are relative to the pane's border, "NOT to a global pane edge or
+      status bar". So `fs-statusrow-math`'s sixel clause is unsupported because
+      **there is nothing there to support** — not because a case was missed.
+      Closing as won't-fix.
+    - **Both were the same error in opposite directions**: a correct *count* of
+      references treated as evidence about *behaviour*. Grep establishes what a
+      file mentions; only tracing establishes what can happen.
+
+34. **A stale comment corrected in `reducer_zoom.go`, and it mattered because
+    four places in this plan leaned on it.** The suppression site carried a
+    "KNOWN DEFECT, do not read this as working" note saying the toast is
+    invisible and every suppressed key a silent no-op. Its premise still holds —
+    the compositor sets `status := ""` while zoomed — but its conclusion is now
+    false: B45 added `App.overlayZoomToast` (`view_status.go:61`), which paints
+    the live toast onto the composed frame's last row (the pane's bottom border,
+    so no content row is spent), plus the screen-memo key on toast text without
+    which the memo would serve a stale frame. Pinned by
+    `zoom_toast_visible_test.go`, which asserts on `stripANSI(a.View().Content)`
+    and never on `statusbarText(a)` — reading the statusbar model is exactly what
+    let the original defect hide. Rewritten as FIXED rather than deleted, per
+    AGENTS.md: when this file and the code disagree, the code is right and the
+    comment is the bug.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
