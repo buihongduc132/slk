@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/gammons/slk/internal/core"
 	"github.com/gammons/slk/internal/emoji"
 	"github.com/gammons/slk/internal/fuzzy"
 	imgpkg "github.com/gammons/slk/internal/image"
@@ -22,6 +23,7 @@ const MaxVisible = 5
 type Model struct {
 	entries  []emoji.EmojiEntry
 	filtered []emoji.EmojiEntry
+	frecent  []core.EmojiEntry
 	query    string
 	selected int
 	visible  bool
@@ -67,6 +69,22 @@ func (m *Model) SetEmojiCustoms(customs map[string]string) {
 // HandleEmojiImageReady is a no-op hook for shape parity with other
 // surfaces. The dropdown has no render cache.
 func (m *Model) HandleEmojiImageReady(_ string) {}
+
+// SetFrecentEmoji sets the frequently/recently used emoji list that
+// feeds filter()'s recent tier. Mirrors
+// reactionpicker.Model.SetFrecentEmoji in name and signature so both
+// emoji surfaces are wired the same way from App.
+//
+// Entries come from core.ReactionService.LoadFrecent, i.e. the
+// frecent_emoji cache table, through App — the picker does no I/O of
+// its own. Passing nil or an empty slice restores tier-only ranking
+// exactly (see frecent_test.go's no-op cases).
+func (m *Model) SetFrecentEmoji(entries []core.EmojiEntry) {
+	m.frecent = entries
+	if m.visible {
+		m.filter()
+	}
+}
 
 func New() Model { return Model{} }
 
@@ -155,29 +173,66 @@ func (m *Model) filter() {
 		return
 	}
 
+	// frecentRank maps a name to its position in the frecent list so the
+	// recent tier keeps the cache's frecency order instead of falling back
+	// to the alphabetical candidate order. Lookups only: the ranking path
+	// never iterates a map, which would make the sort nondeterministic.
+	// Empty when no usage history exists, which leaves every rank at -1 and
+	// the comparison below byte-identical to tier-only ranking.
+	frecentRank := make(map[string]int, len(m.frecent))
+	for i, f := range m.frecent {
+		if _, dup := frecentRank[f.Name]; !dup {
+			frecentRank[f.Name] = i
+		}
+	}
+
 	type match struct {
 		entry emoji.EmojiEntry
 		tier  fuzzy.Tier
 		score int
 		idx   int // To preserve stable input order if tiers tie
+		rank  int // position in the frecent list, or -1 when not frecent
 	}
 	var matches []match
+	// Only m.entries are candidates. A frecent name this workspace's entry
+	// list does not carry is SKIPPED rather than injected — unlike
+	// reactionpicker, which injects glyph-carrying strays because
+	// frecent_emoji is a global table with no team column. The dropdown
+	// inserts `:name:` into a message, so a shortcode that does not resolve
+	// in this workspace would be worse than absent. Pinned by
+	// TestFrecent_UnknownFrecentNameIsNotInjected.
 	for i, e := range m.entries {
 		tier, score, ok := fuzzy.Match(e.Name, q)
 		if ok {
-			matches = append(matches, match{entry: e, tier: tier, score: score, idx: i})
+			rank := -1
+			if r, isFrecent := frecentRank[e.Name]; isFrecent {
+				rank = r
+			}
+			matches = append(matches, match{entry: e, tier: tier, score: score, idx: i, rank: rank})
 		}
 	}
 
 	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].tier != matches[j].tier {
-			return matches[i].tier < matches[j].tier
+		a, b := matches[i], matches[j]
+		// 1. Recent tier. It is frecent INTERSECT matches -- the loop above
+		//    admits a candidate only when it matches the query -- and it
+		//    orders among itself by frecency.
+		if (a.rank >= 0) != (b.rank >= 0) {
+			return a.rank >= 0
 		}
-		if matches[i].tier == fuzzy.TierSubsequence && matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score // Higher score is better
+		if a.rank >= 0 && a.rank != b.rank {
+			return a.rank < b.rank
 		}
-		// Preserve input order (which is alphabetical)
-		return matches[i].idx < matches[j].idx
+		// 2. Name tier: prefix > word > squashed > substring > subsequence.
+		if a.tier != b.tier {
+			return a.tier < b.tier
+		}
+		// 3. Subsequence score; the other tiers all carry 0.
+		if a.tier == fuzzy.TierSubsequence && a.score != b.score {
+			return a.score > b.score // Higher score is better
+		}
+		// 4. Preserve input order (which is alphabetical)
+		return a.idx < b.idx
 	})
 
 	var results []emoji.EmojiEntry
