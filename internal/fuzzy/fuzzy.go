@@ -27,10 +27,10 @@ func Match(name, query string) (tier Tier, score int, ok bool) {
 	if strings.HasPrefix(foldedName, foldedQuery) {
 		return TierPrefix, 0, true
 	}
-	if WordPrefix(foldedName, foldedQuery) {
+	if wordPrefixFolded(foldedName, foldedQuery) {
 		return TierWordPrefix, 0, true
 	}
-	if SquashedPrefix(foldedName, foldedQuery) {
+	if squashedPrefixFolded(foldedName, foldedQuery) {
 		return TierSquashedPrefix, 0, true
 	}
 	if strings.Contains(foldedName, foldedQuery) {
@@ -92,8 +92,13 @@ func WordPrefix(name, query string) bool {
 	if query == "" {
 		return false
 	}
-	foldedName := text.Fold(name)
-	foldedQuery := text.Fold(query)
+	return wordPrefixFolded(text.Fold(name), text.Fold(query))
+}
+
+func wordPrefixFolded(foldedName, foldedQuery string) bool {
+	if foldedQuery == "" {
+		return false
+	}
 	if strings.HasPrefix(foldedName, foldedQuery) {
 		return false // whole-name prefix is not a word prefix
 	}
@@ -118,8 +123,13 @@ func SquashedPrefix(name, query string) bool {
 	if query == "" {
 		return false
 	}
-	foldedName := text.Fold(name)
-	foldedQuery := text.Fold(query)
+	return squashedPrefixFolded(text.Fold(name), text.Fold(query))
+}
+
+func squashedPrefixFolded(foldedName, foldedQuery string) bool {
+	if foldedQuery == "" {
+		return false
+	}
 	words := strings.FieldsFunc(foldedName, func(r rune) bool {
 		return IsSeparator(r)
 	})
