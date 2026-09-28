@@ -390,6 +390,28 @@ _(populated by gotcha-coverage + re-runs)_
       matches display names directly and is the most exposed — a name like
       `Jane Doe / Platform` or `ops:oncall` now word-prefix-matches on the segment
       after the separator.
+    - **CORRECTION, appended after measuring the user's real cache (do not read
+      the reach paragraph above without this).** Two claims in it are wrong.
+      Queried against the deployed dev copy of the live cache (175 channels,
+      93 users):
+      - I wrote that channel names "cannot contain `/` or `:`". **Two channel
+        rows do**, both of shape `<word>:<word>-<word>`. So `channelfinder` is
+        affected in this workspace by *channel* rows, not only DM/mpdm rows.
+      - I wrote that `mentionpicker` "is the most exposed". In this workspace it
+        is **not exposed at all**: `0` of 93 users have a `/` or `:` in either
+        `name` or `display_name`. The exposure is real but it is in
+        `channelfinder`, which is the opposite of what I said.
+      - Measured effect on that shape, against the merged matcher:
+        `Match("abc:def-ghi", "def")` → **tier 2 (WordPrefix)**, and the same for
+        `"ghi"`. Under the deleted code the separator list was `" ", "-", "_",
+        "."`, so `":def"` could not match and it fell through to **tier 4
+        (Substring)**. Those two channels therefore rank *higher* than before for
+        a query matching the post-colon segment — which is arguably the better
+        answer, but it is a live ranking change in the user's own workspace, not a
+        theoretical one.
+      - Lesson, same as the rest of this plan: I reasoned about what Slack
+        permits in a channel name instead of querying the 175 rows sitting in the
+        cache. The data was one SQL statement away the whole time.
     - **This is a deliberate behaviour change, made by the lane and accepted here,
       not a refactor.** It is recorded rather than re-litigated because the wider
       set is the one the subsequence tier has always used, so unifying downward
