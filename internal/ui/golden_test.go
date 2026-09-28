@@ -338,8 +338,10 @@ func TestCompareGolden_UpdateCreatesMissingDir(t *testing.T) {
 //     with the ±14h spread of real UTC offsets.
 //
 // TestNewGoldenApp_RenderIsTimezoneIndependent pins this.
+var goldenZone = time.Local
+
 func goldenClock() time.Time {
-	return time.Date(2026, 3, 15, 12, 0, 0, 0, time.Local)
+	return time.Date(2026, 3, 15, 12, 0, 0, 0, goldenZone)
 }
 
 // newGoldenApp is newTestApp plus every global the render path reads,
@@ -1116,14 +1118,16 @@ func TestNewGoldenApp_RendersActiveChannelName(t *testing.T) {
 // same bytes on a developer's laptop and on CI, whatever TZ each is set
 // to.
 //
-// It swaps time.Local directly rather than shelling out with TZ= so the
+// It swaps goldenZone directly rather than shelling out with TZ= so the
 // whole offset range is covered in one process, including UTC+12..+14
 // where a UTC-anchored clock silently collapses the "Yesterday" divider
-// into a second "Today". Safe here because this package's tests never
-// run in parallel and nothing else reads time.Local concurrently.
+// into a second "Today". It mutates goldenZone rather than time.Local
+// so it does not race with time.Now() calls from timer goroutines left
+// over by other tests. Safe here because this package's tests never run
+// in parallel and nothing else reads goldenZone concurrently.
 func TestNewGoldenApp_RenderIsTimezoneIndependent(t *testing.T) {
-	prev := time.Local
-	t.Cleanup(func() { time.Local = prev })
+	prev := goldenZone
+	t.Cleanup(func() { goldenZone = prev })
 
 	zones := []struct {
 		name    string
@@ -1139,7 +1143,7 @@ func TestNewGoldenApp_RenderIsTimezoneIndependent(t *testing.T) {
 
 	var want, wantZone string
 	for _, z := range zones {
-		time.Local = time.FixedZone(z.name, z.offsetH*3600)
+		goldenZone = time.FixedZone(z.name, z.offsetH*3600)
 		got := newGoldenApp(t, goldenFixtureOpts()...).View().Content
 		if want == "" {
 			want, wantZone = got, z.name

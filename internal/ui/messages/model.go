@@ -3612,7 +3612,7 @@ func DateFromTS(ts string) string {
 	if err != nil {
 		return ""
 	}
-	return time.Unix(sec, 0).Format("2006-01-02")
+	return time.Unix(sec, 0).In(nowFunc().Location()).Format("2006-01-02")
 }
 
 // nowFunc is the clock FormatDateSeparator reads. Production leaves it
