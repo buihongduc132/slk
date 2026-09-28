@@ -57,12 +57,28 @@ const zoomToastDuration = 2 * time.Second
 // silently, the first time a second entry path was added. AGENTS.md:
 // when you find a comment standing in for a check, replace it with the
 // check.
+//
+// The snapshot is taken ONLY when zoom promotes the messages pane
+// (B49). zoomFrontIsThread reports which pane zoom promotes; when it is
+// the thread, the messages pane is not the pane being zoomed and not
+// even drawn, so there is nothing of the user's to put back -- and
+// snapshotting it anyway is actively harmful. The pane keeps receiving
+// live channel traffic behind the zoom, and messages.Model.AppendMessage
+// autoscrolls to the newest message unconditionally; a restore on the
+// way out would silently discard that autoscroll, reverting a viewport
+// the user never navigated.
+//
+// zoomSavedMsgViewport pairs the save with the restore so the two halves
+// cannot drift: exitZoom restores exactly when enterZoom saved.
 func (a *App) enterZoom() {
 	if a.zoomed {
 		return
 	}
-	a.zoomSavedYOffset = a.messagepane.YOffset()
-	a.zoomSavedSelectedIndex = a.messagepane.SelectedIndex()
+	a.zoomSavedMsgViewport = !a.zoomFrontIsThread()
+	if a.zoomSavedMsgViewport {
+		a.zoomSavedYOffset = a.messagepane.YOffset()
+		a.zoomSavedSelectedIndex = a.messagepane.SelectedIndex()
+	}
 	a.zoomed = true
 	// Zoom hides the status row, which is where the "ctrl+w …" / "g …"
 	// hints live. Leaving a chord armed behind a hidden hint means the
@@ -75,7 +91,14 @@ func (a *App) enterZoom() {
 // enterZoom. This is the USER-INITIATED exit path -- the `z` toggle, esc
 // here, and insert mode's esc arm -- where the pane still holds the same
 // content it held at enterZoom, so putting the viewport back is what the
-// user expects.
+// user expects. That includes undoing an autoscroll or a `G` that
+// happened inside the zoomed pane: intended, and pinned by
+// TestZoomExit_MessagesZoomedStillRestoresViewport.
+//
+// It applies to the pane zoom actually PROMOTED, though, and only that
+// one. The restore is therefore gated on zoomSavedMsgViewport rather
+// than run unconditionally (B49) -- see enterZoom for why a thread zoom
+// must leave the messages pane alone.
 //
 // The auto-clear events do NOT come through here; they use clearZoom.
 // Restoring a saved offset onto a pane whose content has been replaced is
@@ -87,7 +110,9 @@ func (a *App) exitZoom() {
 	a.zoomed = false
 	a.disarmPendingChords()
 	a.invalidateZoomCaches()
-	a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
+	if a.zoomSavedMsgViewport {
+		a.messagepane.SetViewport(a.zoomSavedYOffset, a.zoomSavedSelectedIndex)
+	}
 }
 
 // clearZoom drops zoom WITHOUT restoring the saved viewport, for the
