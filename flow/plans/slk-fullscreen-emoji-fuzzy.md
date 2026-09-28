@@ -2278,3 +2278,95 @@ _(populated by gotcha-coverage + re-runs)_
     in that run was my own dead probe flagged `unused`, not lint seeing
     duplication: zero findings mentioned it.
 
+
+61. **Four of the coverage audit's eight UNCOVERED items were already closed or
+    already settled, and two of the four were closed by documents the audit
+    itself could have read. Verified individually, at `ab38b2a`.**
+
+    The audit's final counts listed `UNCOVERED: 8 (B5, B15, B29, B31,
+    B40-timing-half, B49-content-half, B50, B51)` and
+    `ALREADY-FIXED-NO-GUARD: 3 (B2, B34-registration, B35)`. All three of the
+    second list are now closed — B35 `5665841`, B2 `0d3d80f`, B34-registration
+    `6d7740c`. Of the eight, checking each premise against the code first:
+
+    - **B40-timing-half: STALE, closed at item 31 of this very file.** The audit
+      wanted "a blocking `fakeEmojiLister` and an assertion that a frame renders
+      before release". `cmd/slk/startup_emoji_order_test.go` pins the property
+      that claim reduces to — `go fetchWorkspaceEmojiIntoCache` (property 3) —
+      mutation-proven, with `TestStartupEmojiOrder_SeedBeforeFetch` staying GREEN
+      under the same mutation. Item 31 also already records the residue the audit
+      is describing, in the words "Open, deliberately not done here: extracting
+      the startup ordering into an injectable function would allow a real
+      blocking-lister test. That is a change to the startup path with real risk,
+      and it wants its own lane." An audit that reports as UNCOVERED something
+      the plan closed, and whose deferral the plan states, is measuring the
+      catalogue rather than the tree.
+
+    - **B49-content-half: REFUTED, and its framing inverted.** The audit said "no
+      test covers autoscroll/`G` during a legitimate messages-zoom being silently
+      reverted on exit". `TestZoomExit_MessagesZoomedStillRestoresViewport`
+      (`zoom_exit_pane_test.go:157`) drives an inbound message during a
+      messages-zoom, asserts **as a precondition** that the autoscroll moved
+      `yOffset` — so the restore is observable, not vacuous — then asserts the
+      restore undoes it. That is the audit's scenario, tested. And the word
+      "silently reverted" casts as a defect what `exitZoom`'s doc calls the
+      contract: "That includes undoing an autoscroll or a `G` that happened
+      inside the zoomed pane: intended".
+
+      **One genuine residue, and it is the `G` arm.** That doc sentence claims two
+      events; the test drives only the first. They are not the same event —
+      autoscroll is content moving under the user, `G` is the user navigating
+      deliberately — and "undo what the user just asked for" is the more
+      surprising claim, so leaving it to prose was the gap. Closed at `ab38b2a`,
+      `TestZoomExit_MessagesZoomedUndoesAGWhileZoomed`.
+
+      **The control is the point.** "Delete the restore" proves nothing about a
+      second test's marginal value: both tests go RED. The mutation that settles
+      it is adding `a.keys.Bottom` to `zoomSuppresses`, so `G` is swallowed while
+      zoomed — **new RED, sibling GREEN**. Measured, both mutations verified to
+      compile first: leg A new=1 sibling=1, leg B new=1 sibling=0, clean 0/0
+      either side (`~/.local/state/slkfz/b49-control.sh`). Movement is asserted as
+      a precondition, which is *how* leg B is detected: a swallowed `G` fails the
+      precondition rather than passing the assertion trivially.
+
+    - **B50: SETTLED at item 35, premise not established.** The two mechanisms
+      guard different objects (`invalidateZoomCaches` → model caches +
+      `lastScreenValid`; the zoom bit in `threadLayoutKey` → the App-level
+      `panelCache`). Item 35's verdict stands: if pursued, the question is
+      empirical — remove one, drive a transition, diff the frame — not a reading
+      exercise. Not a test gap.
+
+    - **B15: correctly deferred.** The thread pane has no viewport accessor, so
+      "restore when the thread was zoomed" cannot be asserted symmetrically. The
+      capability does not exist to test; Phase 3's pane hooks are the named
+      remediation. A test cannot precede the seam.
+
+    So the honest count of the eight is: **two were stale** (B40, B49 —
+    both closed in-repo before the audit ran), **two are not test gaps at all**
+    (B50, B15), and **four are real and tractable** (B5, B29, B31, B51), which is
+    where the work went. B29 is the only one of the four with a live production
+    defect: `internal/emoji/entries.go` sorts on raw `Name`, so an uppercase
+    custom emoji sorts before every lowercase one, while
+    `emojipicker/model.go:152` states the ordering precondition as a comment with
+    no check.
+
+    **The generalisable lesson, and it is about delegation, not about this
+    audit.** Item 57 recorded that a delegated report which does not name the
+    commit it measured is unreadable. This adds the other half: **a delegated
+    report that measures a catalogue rather than a tree can name the right commit
+    and still be stale**, because the catalogue entry and the repo disagree and
+    the entry is what got read. Both B40 and B49 were closed *in files the audit
+    cited by name*. The remedy is the same shape as the commit line — require the
+    report to quote the test it claims is absent as absent, i.e. to name the
+    grep that came back empty, not just the conclusion.
+
+    **A procedural note on my own framing, since I got this wrong twice today.**
+    I told the user B2 needed their decision on re-pinning an oracle. It did not:
+    the pin rule's sanctioned escape hatch is "add a new unpinned file
+    alongside", and I wanted to *add* an assertion, not weaken the pinned one.
+    SA1019 was genuinely different because the finding sat *inside* the pinned
+    file. Separately I declined B34-registration on the grounds that it "would
+    have caught neither problem that actually occurred here (a wrong number, a
+    dangling cross-reference)" — true, and too narrow: a row naming a deleted
+    helper is a real failure mode whether or not it is the one that just
+    happened. Both were mine to decide and I escalated or declined instead.
