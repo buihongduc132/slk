@@ -2370,3 +2370,77 @@ _(populated by gotcha-coverage + re-runs)_
     dangling cross-reference)" — true, and too narrow: a row naming a deleted
     helper is a real failure mode whether or not it is the one that just
     happened. Both were mine to decide and I escalated or declined instead.
+
+62. **B5 is real and now guarded; B31 is REFUTED, and the refutation is the more
+    useful of the two results. Both delegated, both re-verified here from
+    scratch.**
+
+    Two of the four tractable UNCOVERED items came back. Each delegate was
+    required to report `Audited commit: <sha>` as its first line (item 57's
+    remedy) and to run a compile-checked mutation control. Both named
+    `6d7740c`; my HEAD had moved to `4fd95ad`, and `git diff --name-only
+    6d7740c..HEAD` touches only the plan file and `zoom_exit_pane_test.go`, so
+    neither verdict was measured on a stale copy of the code it concerned.
+    **That check is the one item 57 said to make routine, and it is cheap: two
+    commands.**
+
+    - **B5: CONFIRMED and closed (`e8c61da`).** `ClickAt`'s
+      `if i < len(m.cache)-1 { hitEnd-- }` has two halves and neither was
+      pinned. Four tests now cover them, built through the real `View()` path
+      because the trailing spacers under test are appended by
+      `renderMessageEntry` during a build — a hand-assigned `m.cache` has none,
+      and the test would assert nothing.
+
+      **The mutation could not be applied as specified, and that is the
+      interesting part.** Deleting the condition leaves the range variable `i`
+      unused, which is a *compile error*, so the naive control reports "every
+      test failed → caught" while nothing semantic ran. Both legs therefore
+      carry a companion `for i, entry` → `for _, entry`, and
+      `go build ./... rc=0` is asserted on each mutated tree before any failure
+      is believed. This is the fourth time the compile gate has caught a
+      would-be false verdict (item 60 records the first three).
+
+      **The measurement that decides whether the tests were worth writing:
+      `pre-existing tests also failing: 0` on BOTH legs.** So this is the only
+      coverage of that guard, not a second layer over something already tested.
+      A control that stops at "the package went red" cannot tell those apart,
+      which is why `b5-control.sh` prints the failing test names and counts the
+      ones that are not its own.
+
+    - **B31: REFUTED. The mutation SURVIVES, and it survives because it is
+      unobservable — not merely unguarded.** `mutate-check.sh` at `4fd95ad`
+      reports SURVIVED for `consider(f, len(m.allEmoji)+j)` → `consider(f, j)`.
+      That alone would argue for writing the missing test. The delegate argued
+      the stronger claim, so I verified it by reading the comparator rather than
+      trusting either the claim or my harness:
+
+      Step 4 (`a.idx < b.idx`) is reached only when rank-presence matches, ranks
+      are **equal**, tiers are equal and scores are equal. `frecentRank` assigns
+      distinct positions to distinct names, so equal rank means the *same name* —
+      and loop 2 skips `inAll[f.Name]`, so one name cannot appear in both pools.
+      **No cross-pool pair can reach step 4.** `matches` is also appended in
+      strictly increasing `idx` across both loops, so `sort.SliceStable` already
+      produces that order for ties and step 4 is redundant even within a pool.
+
+      The item's premise is wrong twice over, not merely over-cautious: the
+      synthetic index does not place frecent-only entries *last* (rank has
+      already decided — observed order put a rank-0 frecent-only entry **first**),
+      and the feared index collision cannot interleave anything, because a pair
+      needing that tie-break cannot reach it. `len(m.allEmoji)+j` is defensive
+      but dead, and the `idx` comment's "unique, so ranking is a total order"
+      describes something real but unobservable.
+
+      **No test was written, deliberately.** Any test that passed here would pass
+      for a reason unrelated to the line it claimed to guard — the exact vacuity
+      shape this effort keeps re-discovering. Recording the refutation is the
+      deliverable. Corollary worth keeping: **"the mutation survived" is not
+      sufficient grounds to write a test.** It establishes that no test fails;
+      it does not establish that a test *could* fail for the right reason. Those
+      come apart exactly when the code is dead, and dead code is where a
+      confident coverage audit is most likely to send you.
+
+      Neighbour found and left alone: the `f.Unicode == ""` skip
+      (`reactionpicker/model.go:291`) has no test in either picker package
+      constructing an empty-`Unicode` frecent entry. Genuinely uncovered,
+      different item, not folded in (AGENTS.md: found while looking, raised
+      separately).
