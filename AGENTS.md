@@ -97,7 +97,7 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Extract links from message text | `messages.ExtractLinks` |
 | Does message text mention the current user? | `mention.InText(text, selfUserID)` |
 | Reaction pill rendering | `messages.ReactionPillText` |
-| Date label from a Slack ts | `messages.DateFromTS`, `messages.FormatDateSeparator` — but see the row above for two more parsers of the same ts format that should have called this instead |
+| Date label from a Slack ts | `messages.DateFromTS`, `messages.FormatDateSeparator`. **Two more parsers of the same ts format exist** and should have called this: `cmd/slk/history.go:627` `formatTimestamp` (7 call sites) and `cmd/slk/workspace_search.go:112` `formatSearchTimestamp`. All three hand-roll the identical prelude — `strings.SplitN(ts, ".", 2)` → `strconv.ParseInt(parts[0], 10, 64)` → `time.Unix(sec, 0)`. The *formatting* legitimately differs (search results span months, so they need a date prefix), so this is not one function wearing three hats; what is triplicated is the **parse**. Extract that, not the formatters |
 | mpdm channel name → human name | `slackfmt.FormatMPDMName` |
 | Channel-type glyph (`#` / `◆` / `●`) | `messages.ChannelGlyph(chType)` |
 | Slack permalink parsing | `slackurl.Parse` |
