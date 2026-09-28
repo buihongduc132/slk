@@ -642,6 +642,41 @@ _(populated by gotcha-coverage + re-runs)_
       *for those two* but not for the screen memo. Tightening it would be a
       readability change with a stale-frame downside and no measured upside.
 
+36. **B53 is closed (`2a8ef4c`, lane `slkfz/lane-digits`, merged `3f177ad`), and
+    the appendix undercounted it twice.** One `(*App).workspaceSwitchIndex`
+    predicate now lives in `reducer_zoom.go`; `zoomSuppresses` and
+    `mode_normal.go` both call it.
+    - **Three sites, not two.** The character-class test was at
+      `mode_normal.go:357`, `reducer_zoom.go:146` *and* `reducer_zoom.go:149` —
+      the alt clause carried its own copy. Mandated duplicate-value class, third
+      instance after B35 and B41.
+    - **`alt+1`..`alt+9` had NO handler anywhere in the tree.** Verified by
+      searching it before the oracle was written. So the second suppression clause
+      swallowed a combination that did nothing, and the comment above it — "bare
+      1-9 and alt+1-9 both switch workspace" — was false for the alt half. The
+      lane **deleted** the clause, which is one of the two answers the oracle
+      permits (the other being to add the binding).
+    - **The appendix's severity reasoning was also off.** It rated B53 as
+      depending on "whether normal mode uses counts — unverified". Normal mode has
+      no counts, and it does not need them: the asymmetry was already live, since
+      the handler guards on `idx < len(a.workspaceItems)` and the suppressor did
+      not. With two workspaces, `3`..`9` while zoomed were consumed; unzoomed they
+      were harmless no-ops.
+    - **I wrote an over-strict oracle first and caught it by running it.** The
+      initial assertion required `zoomSuppresses(k)` to equal "normal mode
+      returned a command", which failed digit `1` — the already-active workspace.
+      That is not a defect but a contested contract: (A) suppress what would act,
+      versus (B) suppress what the key *means*. Asserting either would have
+      smuggled a product decision into a refactor. The pinned version asserts only
+      what both readings agree on and logs the contested cell.
+    - **Process note worth keeping: the first dispatch of this lane failed on MY
+      prompt, not the model's work.** It burned six iterations with zero diff,
+      circling on where to put the helper, because the prompt told it to register
+      new helpers in the AGENTS.md table — which applies to reusable cross-package
+      helpers, not an unexported method used by two files in one package. Naming
+      the file and forbidding the deliberation fixed it in one relaunch. A prompt
+      that hands an agent an open question it cannot close is a prompt defect.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
