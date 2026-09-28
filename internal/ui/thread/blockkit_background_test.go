@@ -50,6 +50,7 @@ func bareRuns(s string) []string {
 
 func TestRenderThreadMessage_BlockKitRunsKeepBackground(t *testing.T) {
 	styles.Apply("nord", config.Theme{})
+	t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 	m := New()
 	// The defect needs the avatar gutter: it is prepended to every line
 	// after the Block Kit lines are composed, and its closing reset is

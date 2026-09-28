@@ -618,6 +618,7 @@ func TestMutedMentionBadgeStyle_DiffersFromNormalOnBothThemes(t *testing.T) {
 	for _, theme := range []string{"dark", "light"} {
 		t.Run(theme, func(t *testing.T) {
 			styles.Apply(theme, config.Theme{})
+			t.Cleanup(func() { styles.Apply("dark", config.Theme{}) })
 			normal := styles.MentionBadgeStyle()
 			muted := styles.MutedMentionBadgeStyle()
 
