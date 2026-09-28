@@ -73,8 +73,25 @@ func TestXDG_DataHomeHasExactlyOneResolutionSite(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "testdata", "wiki", "docs", "flow":
+			case ".git", ".claude", "testdata", "wiki", "docs", "flow", "vendor", "node_modules":
 				return filepath.SkipDir
+			}
+			// A subdirectory carrying its own go.mod is a DIFFERENT module: a
+			// git worktree, a vendored copy, a nested example. Its files are not
+			// this module's source, and counting them is a false positive.
+			//
+			// This is not hypothetical -- it fired. Agent worktrees created by
+			// EnterWorktree live at .claude/worktrees/<name>/, INSIDE the repo,
+			// each a full tree with its own internal/xdg/xdg.go. Six of them
+			// turned this test's answer from 1 into 7 and failed `go test ./...`
+			// in the main checkout while still passing in every lane worktree
+			// (which has no nested copies). A blacklist of ".claude" alone would
+			// have fixed that one case and left the next one -- hence the
+			// general rule.
+			if path != root {
+				if _, statErr := os.Stat(filepath.Join(path, "go.mod")); statErr == nil {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}
