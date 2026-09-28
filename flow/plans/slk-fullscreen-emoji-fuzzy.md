@@ -2052,3 +2052,97 @@ _(populated by gotcha-coverage + re-runs)_
     lesson here: capture `$?` directly with no pipe, and verify the tools exist
     before trusting a comparison built from their output.**
 
+58. **The best-practice audit's severity ranking was ANTI-CORRELATED with reality
+    at the top: its #1 is a non-finding, its #2 is latent not live, and its #4 is
+    the only one that is actually live. Every claim below was re-verified by me;
+    none of the audit's own evidence was taken on trust.**
+
+    **#1 is a NON-FINDING.** It flagged `styles.Apply("default", …)` without
+    `t.Cleanup` at `compose/model_test.go:1256` and `app_thread_broadcast_test.go:73`,
+    asserting later tests "silently inherit `default` instead of `dark`" and that
+    `ComposeInsertBG` makes it "a real color divergence, not cosmetic."
+
+    **`"default"` is not a key in the theme table.** `lookupTheme`
+    (`internal/ui/styles/themes.go:499-508`) returns `builtinThemes["dark"].Colors`
+    as its fallback. Measured across every exported style var: **dark vs default,
+    0 of 20 fields differ.** Control in the same run: **dark vs nord, 18 of 19
+    differ** — so the comparison is not blind. Those two sites leak *the exact
+    value the correctly-guarded sites restore to*. The named mechanism
+    (`ComposeInsertBG`) is identical under both: `{34 52 57 255}`.
+
+    **#2 is real but LATENT, not live.** The `"nord"` sites
+    (`messages/blockkit_background_test.go:56,113,124,151`,
+    `thread/blockkit_background_test.go:52`) do leave genuinely different global
+    state — nord differs from dark in 18 of 19 fields. But nothing reads it:
+    **12 `-shuffle` runs across four packages all pass**, and forcing a wrong
+    ambient theme via an `init()` in all four packages — both `"nord"` and
+    `"default"` — leaves all four **still passing**. Worth fixing as debt against
+    a future reader; not the live ordering hazard claimed.
+
+    **#4 is the real one, and it is LIVE.** `internal/ui/editor_test.go` leaks
+    `VISUAL`/`EDITOR` out of two tests into every later test in the `ui` binary.
+    Proven by discrimination, not inspection: with both set in the parent env,
+    running the editor tests plus a later probe leaves both **absent**
+    (`present=false`, rc=1); running the probe alone leaves both present with
+    their sentinel values (rc=0).
+
+    **And the audit inverted its mechanism.** It called
+    `t.Setenv("VISUAL", "")` followed by `os.Unsetenv("VISUAL")` (lines 26-27) a
+    "wasted `t.Setenv`". That pairing is the **correct idiom** — `t.Setenv`
+    registers a restore-to-original cleanup *at call time*, so the following
+    `os.Unsetenv` is still undone. The actual defect is the **4 bare
+    `os.Unsetenv` calls** at `:37-38` and `:51-52`, in two tests with no
+    `t.Setenv` at all. The audit flagged the fix and missed the bug, while
+    landing on the right file.
+
+    **Confirmed exactly as claimed:** 7 Fatal-calling setup helpers missing
+    `t.Helper()` (Fatal 1-3, Helper 0 at each), with the in-repo contrast
+    `typePresenceQuery` real; `renderBox` = **11**; `visibleWindow` = **7**;
+    `itoaU8` and `fmtRGBBg` each declared **4 times** byte-identical across
+    `messages`/`thread`/`compose`/`threadsview` test files — worse than any
+    "declared twice" case AGENTS.md tracks.
+
+    **A real AGENTS.md divergence:** it claims `messages.Model` and `thread.Model`
+    share "45 identically-named methods". The count is **55 total, 48 exported**
+    (97 methods in messages, 82 in thread, intersected). Plus a divergence *inside*
+    that set which the file never mentions: `messages.Model.ClickAt(y int) bool`
+    vs `thread.Model.ClickAt(y int)` with no return. The lockstep test cannot catch
+    it — it compares rendered frames, not signatures.
+
+    **One claim false, with the right conclusion underneath it.** The audit called
+    `newmessagepicker` "the only picker that does NOT import `internal/fuzzy`."
+    Measured: **5 of 9** picker/finder packages do not import it — `channelpicker`,
+    `linkpicker`, `workspacefinder`, `searchresults` and `newmessagepicker`. But
+    four of those five hand-roll **no matcher at all** (0 match functions each),
+    while `newmessagepicker` has 2 (`filter.go:74,91`). So it *is* the only one
+    that reimplements matching, and since `strings.ToLower` is not `text.Fold`
+    that is a behavioural gap (no accent folding), not just duplication. Right
+    conclusion, wrong reason — and a reason I would have propagated into AGENTS.md
+    verbatim had I not counted.
+
+    **MY OWN probe was vacuous twice before it was sound, in two distinct ways.**
+    First: a comparison enumerating exported style vars reported "TOTAL DIFFERING
+    FIELDS: 0 of 0" and passed. The `0 of 0` was the tell — my grep used `\t`,
+    which **POSIX ERE treats as a literal `t`**, so it matched zero vars and the
+    probe compared nothing. Second, and worse in principle: the ambient-theme
+    probe *passed*, which is exactly what a file that failed to compile in would
+    also produce. So I ran a control — an `init()` that panics — and confirmed
+    `rc=1` with the panic surfacing, proving the probe genuinely compiled and ran
+    before I believed its green. **A probe that reports "no problem" must first
+    prove it was capable of reporting one**; this is the tenth vacuity shape and
+    the closest call of the session, because "0 of 0" and "0 of 20" read almost
+    identically in a log.
+
+    **The generalizable lesson about delegation.** The audit's findings were
+    individually well-evidenced with file:line throughout, and it had itself
+    spawned sub-forks and cross-checked them — visible care. Yet its **ordering**
+    was the least reliable part of it, because ranking requires knowing whether a
+    mechanism *fires*, and that is exactly what reading code cannot tell you.
+    Three of its top four needed a dynamic control to settle, and two moved
+    category once run. **Take located facts from a delegate; re-derive severity
+    yourself.** Concretely: every "this is live" claim needs a discriminating run
+    (mutation, shuffle, forced ambient state, or a before/after control), and
+    "unguarded" is a statement about code while "live" is a statement about
+    behaviour — the audit used them interchangeably and that is where its ranking
+    went wrong.
+
