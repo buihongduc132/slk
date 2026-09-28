@@ -1466,3 +1466,80 @@ _(populated by gotcha-coverage + re-runs)_
     script at `~/.local/state/slkfz/hunt-timelocal-race.sh`. **It is a real CI
     flake**: AGENTS.md names `go test ./... -race` as what CI runs, and that is
     phase C.
+
+    **A THIRD independent observation, appended after the fact.** The
+    sidebar lane (item 48) hit the same race unprompted, with the same stack,
+    and added a structural attribution argument worth keeping: `updateAndRender`
+    is `_, _ = a.Update(msg)` — it DISCARDS the returned `tea.Cmd` and never
+    runs it, so a test using only that helper cannot arm a timer and cannot be
+    the read side. It measured 3/8 with its file present and 1/10 with it moved
+    aside, and explicitly declined to claim a rate change at that sample size.
+    Declining to read signal out of 3/8-vs-1/10 is the correct call and is
+    recorded as an example: two of this document's earlier errors came from
+    treating small-sample differences as findings.
+
+
+48. **The "correct by construction but untested" zoom claim is now TESTED
+    (merged as `08622b9`), and the gap it covered was real.** I had asserted
+    that zooming with the sidebar already hidden collapses the Tab ring to one
+    pane, and left it untested with that phrase — which is what people say
+    immediately before a defect.
+
+    **The branch genuinely had zero coverage.** Every pre-existing zoom-focus
+    test runs with the sidebar VISIBLE, while `FocusNext`/`FocusPrev` handle the
+    hidden case in a **separate early-return branch with its own two predicate
+    calls**, not shared with the three-pane switch below it.
+
+    **Verified by my own mutation control.** Reverting both hidden-sidebar
+    branches to their pre-`1faa1fb` visibility-only form turns **7 rows RED**
+    (six ring rows across both directions, plus the flip test) while the three
+    thread-absent rows stay GREEN — so the mutation is specific to the zoom rule,
+    not a blanket break. Then the sharp one: mutation applied AND the new file
+    moved aside, the whole package still passes, `ok internal/ui 11.360s`.
+    Nothing in the repo caught it.
+
+    **Ring length measured, not argued:** 1 in all six configurations (3 widths
+    × thread present/absent), holding `PanelThread` at 120 with a thread open and
+    `PanelMessages` in the other five. Six presses per row in both directions,
+    each press asserting the drawn bands rather than only `focusedPanel`.
+
+    **THE WIDTH CONSTANTS DO NOT CARRY OVER — measured by me, not inherited.**
+    The sidebar is an *input* to the branch, since `Compute` subtracts its 30
+    cols + 2 border before testing against `minMsgWidth+minThreadW`. First
+    side-by-side width: **162 shown, 130 hidden**. That leaves **130–161 as a
+    band where the sidebar alone decides the layout**, and at 150 with the
+    thread open and focused `zoomFrontIsThread` really does flip `true → false`
+    when the sidebar is hidden. A test reusing only the inherited 120/200 pair
+    would never exercise that flip.
+
+    **A dead constant, caught and closed.** `firstSideBySideWidthNoSidebar = 130`
+    was declared and referenced NOWHERE — its only non-comment occurrence was
+    its own declaration, and Go does not flag an unused package-level constant.
+    Meanwhile the file's header cited it to argue the other constants do not
+    carry over: a geometry number maintained by hand, which is exactly what
+    AGENTS.md says to replace with a check. It is now asserted one column apart,
+    each row re-run at the same width with the sidebar SHOWN where both must
+    still stack — that second half is what pins the *value* rather than merely
+    its existence.
+
+    **My vacuity probe went further than the lane's own claim.** It reported 129
+    and 131 failing. I swept the band: **121, 129, 131, 140, 150 and 161 all
+    FAIL, and only 130 passes** — so the assertion pins a unique value, not a
+    range. Its sibling claim also holds: 162 is already asserted in two places
+    (`zoom_front_pane_test.go:141-142`, `zoom_focus_drawn_pane_test.go:112-113`),
+    so only this twin was unpinned.
+
+    **Order (b) is unreachable and pinned as such.** `ctrl+b` is in
+    `zoomSuppresses`, so `reduceZoom` claims the key before `mode_normal.go`'s
+    `ToggleSidebar` arm — the only production caller. Pinned as *suppression*
+    rather than forced with a direct `ToggleSidebar()` call, so if suppression is
+    ever lifted that test fails and whoever lifts it has to write the order-(b)
+    rows deliberately. (Probed anyway: the forced state's ring is also 1.)
+
+    **Unspecified state found and deliberately left.** While zoomed, `Compute`
+    forces `sidebarVisible = false` so the sidebar is never drawn — yet
+    `FocusNext` branches on the FIELD, so with the sidebar shown Tab still
+    reaches `PanelSidebar` while zoomed. `reducer_zoom.go:112-118` documents this
+    as deliberate, on the grounds that the sidebar is not a keystroke sink. Not a
+    defect, but it is the one place focus legitimately sits on something zoom does
+    not draw, and it is specified only in a comment plus an indirect test.
