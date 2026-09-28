@@ -677,6 +677,65 @@ _(populated by gotcha-coverage + re-runs)_
       the file and forbidding the deliberation fixed it in one relaunch. A prompt
       that hands an agent an open question it cannot close is a prompt defect.
 
+37. **B37's stated MECHANISM is refuted, but its DESTRUCTIVE HALF is real under a
+    different trigger — so it closes as a fix, not a refutation.** The appendix
+    said to verify partial success before acting. Verified: it cannot happen, and
+    something else can.
+    - **No truncation path exists.** `emoji.list` does not page. Slack's
+      reference documents exactly two arguments (`token`, `include_categories`)
+      and no `cursor`/`limit`/`page`; no `response_metadata.next_cursor` and no
+      `has_more` in the response. slack-go v0.23.0's `GetEmojiContext`
+      (`emoji.go`) posts only a token, never loops, and returns `response.Emoji`
+      alone — it *discards* the embedded `SlackResponse.ResponseMetadata.Cursor`
+      the struct could technically carry. And slk's own seam cannot express a
+      page: `customEmojiLister.ListCustomEmoji` returns
+      `(map[string]string, error)`, so "half a list plus a cursor" is
+      unrepresentable by construction. **There are no pages to lose.** This is a
+      fourth item whose premise did not survive contact, after B47's first half,
+      B50 and B51 — and the same shape as those: a correct reading of the *cache
+      contract* mistaken for evidence about *what the API can return*.
+    - **The destructive half is real, and the trigger is an EMPTY success.**
+      `cache.UpsertCustomEmoji` is a wholesale replace — DELETE the team's rows,
+      then INSERT the argument (`internal/cache/customemoji.go:47`) — so an empty
+      map empties the team. That is deliberate and pinned
+      (`TestCustomEmoji_EmptyUpsertClearsTheTeam`). The appendix was right that
+      every covered failure path keys on an **error**. What it missed is that
+      empty-with-a-NIL-error is producible without any partial page: Slack
+      documents `{"ok": true}` as a minimal success body, an absent `emoji` field
+      decodes to a nil map, `GetEmojiContext` returns it with a nil error, and
+      slk's `ListCustomEmoji` (`internal/slack/client.go:858-860`) normalises
+      that nil to an empty map — still a nil error. It walked straight through
+      the `err != nil` gate and cleared the team's rows.
+    - **The fix is the emptiness check the other two publish sites already had.**
+      `fetchWorkspaceEmojiIntoCache` now returns early on `len(emojis) == 0`.
+      Note what this means: the guard was already the house convention at two of
+      three sites — `seedCustomEmojiFromCache` (B17) and `connect.go:235`'s
+      `len(res.Emojis) > 0` — and the fetch was the lone site missing it. The
+      appendix framed B37 as a novel hazard; it was an inconsistency.
+    - **Scoped to empty on purpose, and the asymmetry is why.** No "implausibly
+      smaller" ratio heuristic: that guards the truncation just refuted while
+      misfiring on a legitimate bulk deletion. The tradeoff is recorded rather
+      than hidden — if an admin really deleted every custom emoji, the cache now
+      keeps one stale set until the next fetch (a few dead shortcodes), whereas
+      honouring a spurious empty destroys a known-good set and every custom emoji
+      in the workspace renders as literal `:name:`. A workspace that genuinely
+      has none is unaffected either way: its cache is already empty, so the
+      skipped write was a no-op.
+    - **RED proven both ways it can arrive.** The new test is table-driven over
+      empty-non-nil (what slk's client normalises to) and nil (what slack-go
+      hands back for a bodyless `ok:true`), and asserts three things, all of
+      which failed before the fix: the cache kept its 2 entries (it held 0), the
+      published subset survived, and no `CustomEmojisLoadedMsg` was sent (one
+      was — an empty one, which would have stripped the UI's set).
+    - **No pin written for the no-paging property, deliberately.** A test
+      asserting `ListCustomEmoji` has no cursor would be exactly the vacuity
+      shape this plan has now catalogued four times: the signature makes the bad
+      state unrepresentable, so the compiler already enforces it and an
+      assertion could not fail. Same reasoning that retired
+      `TestSeedCustomEmojiFromCache_NeverCallsTheLister` under B23. The evidence
+      is recorded in the test's header comment instead, where a future author
+      adding a cursor will read it.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
@@ -801,12 +860,16 @@ _(populated by gotcha-coverage + re-runs)_
     `customemojiseed_nonclobber_test.go` — the files added under B17/B18, i.e.
     the criterion predates its own evidence and was never re-pointed, leaving the
     real proof files unprotected.
-    - **B37**: the cache contract is destructive replace, and every covered
-      failure path keys on an **error**. A 200 carrying a partial page is not an
-      error and clears everything absent from it — the `:shortcode:` regression
-      dod-2 exists to prevent, worst on the largest workspaces. Whether
-      `emoji.list` as called here can return a partial success is **unverified**;
-      check that before acting.
+    - **B37** (CLOSED — see outcome 37; mechanism refuted, hazard real): the
+      cache contract is destructive replace, and every covered failure path keys
+      on an **error**. A 200 carrying a partial page is not an error and clears
+      everything absent from it — the `:shortcode:` regression dod-2 exists to
+      prevent, worst on the largest workspaces. Whether `emoji.list` as called
+      here can return a partial success is **unverified**; check that before
+      acting. *Checked: it cannot — the method does not page and the client's
+      seam cannot express a page. But an empty `ok:true` reaches the same
+      destructive replace without being a partial page, so the guard landed for
+      that trigger instead.*
     - **B40**: "zero network wait" is a timing claim whose closest oracle
       (`TestStartupEmojiOrder_SeedBeforeFetch`) pins *call ordering*. Ordering
       permits the seed to sit behind a startup barrier. Wants a blocking
