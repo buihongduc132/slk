@@ -49,6 +49,32 @@ func (a *App) handleWindowChord(msg tea.KeyMsg) tea.Cmd {
 // the rectangle is always the channel-in-front layout, even while a
 // stacked thread is in front. A scratch layout keeps the bands View
 // stored for mouse hit-testing intact.
+//
+// WHY threadFront IS HARDCODED false WHILE a.zoomed IS LIVE (B48 / OT21).
+// The asymmetry is deliberate, and safe for two different reasons:
+//
+//   - Unzoomed it is the contract in the paragraph above: the windows
+//     fill the channel-in-front area regardless of which pane the frame
+//     is currently drawing. Passing layoutThreadFront() here instead
+//     collapses the rect to W=0 whenever a stacked thread is in front,
+//     which refuses every split with "Not enough room".
+//
+//   - Zoomed, the hardcoded false disagrees with the frame in exactly one
+//     state: stacked (< 162 cols) with the thread promoted, where this
+//     returns the messages-zoomed area (W=120 at 120x30) for a frame with
+//     MsgWidth=0. That state is unreachable. Both callers, splitWindow and
+//     navigateWindow, are only reached through the ctrl+w chord or the
+//     :sp / :vsp commands, and reduceZoom's zoomSuppresses swallows
+//     WindowPrefix and CommandMode while zoomed; enterZoom's
+//     disarmPendingChords stops an armed chord surviving the transition.
+//     Insert mode is not a bypass either — handleInsertMode has no
+//     window-chord arm, so ctrl+w never reaches handleWindowChord.
+//
+// Both halves are pinned by internal/ui/window_bounds_zoom_test.go, which
+// checks the rect against the live frame in every reachable state and
+// pins the reachability argument separately. If that second test starts
+// failing, this call site needs layoutThreadFront() (or its callers need
+// a guard) before whatever opened the route can ship.
 func (a *App) windowBounds() wintree.Rect {
 	var scratch panelLayout
 	frame := scratch.Compute(a.width, a.height, a.workspaceRail.Width(), a.sidebar.Width(),

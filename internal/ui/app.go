@@ -951,6 +951,14 @@ func (a *App) threadDrawnAloneAt(zoomed bool) bool {
 // also what keeps Tab from flipping WHICH pane is zoomed (G15): Tab
 // moves focus, but at a width where both panes fit, the branch that
 // decides the widths does not consult focus at all.
+//
+// This paragraph is no longer the only thing holding that contract up
+// (B48 / OT21): internal/ui/zoom_front_pane_test.go is the check.
+// B48 reported the side-by-side behaviour as a defect — "z zooms the
+// messages pane even when the thread is focused" — which is precisely
+// what this function is for, so the report was closed in favour of the
+// code and the prose was replaced with the test. Mutating this body to
+// `a.threadVisible && a.focusedPanel == PanelThread` fails it.
 func (a *App) zoomFrontIsThread() bool {
 	return a.threadDrawnAloneAt(false)
 }
