@@ -90,17 +90,21 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Rank a candidate name against a typed query | `fuzzy.Match(name, query)` → `(Tier, score, ok)`; folds both sides itself, so pass raw strings |
 | The individual match predicates behind it | `fuzzy.SubsequenceScore` (in-order walk + word-boundary/tightness score), `fuzzy.WordPrefix`, `fuzzy.SquashedPrefix` |
 | Slack mrkdwn → plain text | `messages.FlattenMrkdwn`, `messages.FlattenMrkdwnWithUserGroups` |
+| Slack mrkdwn → styled/rendered text, or → CommonMark | `messages.RenderSlackMarkdownWith(text, opts)` (`render.go:670`); `messages.SlackMrkdwnToCommonMark` / `SlackMrkdwnToCommonMarkWithUserGroups` (`render.go:916,922`) — the sibling of `FlattenMrkdwn` for callers that want CommonMark or styled output instead of plain text; used by `internal/export/markdown.go`, `internal/ui/app.go`, `internal/ui/thread/model.go`, `internal/ui/activityview`, `internal/ui/threadsview` |
+| Which mrkdwn string a message should actually render | `messages.MessageTextSource(msg)` (`model.go:530`) — the block-vs-text-field resolution rule; called from 3 places outside its own package (`internal/export/markdown.go`, `internal/ui/app.go`, `internal/ui/thread/model.go`), so it belongs beside `BlocksCarryBody` above, not reimplemented at each call site |
+| SGR background/foreground codes for a rendered line | `messages.BgANSI()` / `messages.FgANSI()` (`render.go:549,580`), `messages.ReapplyBgAfterResets(text, style)` (`render.go:274`) — all three are heavily used across the package and none was listed in this table before now |
 | Search-term highlighting (ANSI/OSC-safe) | `messages.HighlightSearchTerms`, `messages.SearchHighlightSGR` |
 | Extract links from message text | `messages.ExtractLinks` |
 | Does message text mention the current user? | `mention.InText(text, selfUserID)` |
 | Reaction pill rendering | `messages.ReactionPillText` |
-| Date label from a Slack ts | `messages.DateFromTS`, `messages.FormatDateSeparator` |
+| Date label from a Slack ts | `messages.DateFromTS`, `messages.FormatDateSeparator` — but see the row above for two more parsers of the same ts format that should have called this instead |
 | mpdm channel name → human name | `slackfmt.FormatMPDMName` |
 | Channel-type glyph (`#` / `◆` / `●`) | `messages.ChannelGlyph(chType)` |
 | Slack permalink parsing | `slackurl.Parse` |
 | Emoji shortcode → glyph | `emoji.Sprint`, `emoji.CodeMap`, `emoji.StripSkinTone` |
 | Frecent ("recent") emoji tier on an emoji surface | `SetFrecentEmoji([]core.EmojiEntry)` on **both** `reactionpicker.Model` and `emojipicker.Model`; data comes from `core.ReactionService.LoadFrecent` via `App` — never read the cache from inside `internal/ui` |
 | Does Block Kit already render the message body? | `blockkit.RendersBody(blocks)`, `messages.BlocksCarryBody(msg)` |
+| Display-width-aware truncate/pad inside a Block Kit render | `blockkit.truncateToWidth(s, width)` (`internal/ui/messages/blockkit/render.go:472`, ellipsizes on overflow) / `padRight(s, w)` (`:439`) — both go through `lipgloss.Width`, so they're columns-correct like `emoji.Width`/`SliceColumns` above, just living in a third location scoped to Block Kit rendering |
 | Current DND state from a Slack API result | `slack.DNDStateFromStatus` |
 | Peer custom status, DND and huddle rendering | `ui/peerstatus` (`Status`, glyph/expiry/summary methods); `messages.AuthorStatusSuffix` for author headers |
 | Usergroup map helpers | `usergroups.Copy`, `usergroups.Equal`, `usergroups.Display` |
@@ -172,6 +176,8 @@ greppable by name; no line numbers, because these files move.
 | The same branch with the sidebar HIDDEN | `firstSideBySideWidthNoSidebar` (130 — 129 stacks), `sidebarDecidesWidth` (150) (`internal/ui/zoom_sidebar_hidden_tab_test.go`). The sidebar's 30+2 cols are an **input** to that branch, so `firstSideBySideWidth` does not carry over: 130–161 is a band where hiding the sidebar alone flips the layout from stacked to side-by-side, and with it which pane zoom promotes. Both boundary constants are **asserted**, not just declared — `TestZoomSidebarHidden_BoundaryWidthMovesWhenTheSidebarGoes` here, `TestZoomFrontPane_G15_BoundaryWidth` for 162. Go does not flag an unused constant, so a geometry number nothing references is a hand-maintained comment; if you add one, pin it |
 | Hide the sidebar through the real `ctrl+b` path, asserting it went | `hideSidebar(t, a)` (same file). Only valid **unzoomed** — `ctrl+b` is in `zoomSuppresses`, so while zoomed it raises the toast and the sidebar stays put |
 | Every sidebar-hidden zoomed configuration, with the one pane its Tab ring must hold | `sidebarHiddenRings()` + `zoomedSidebarHiddenApp(t, tc)` (same file) |
+| Format a `uint8` for a hand-built SGR background code | `itoaU8(v)` + `fmtRGBBg(r, g, b)` — **declared four times**, byte-identical (`threadsview`'s copy is reformatted onto one line but is the same expression): `internal/ui/messages/model_test.go:1121,1135`, `internal/ui/thread/model_test.go:370,384`, `internal/ui/compose/model_test.go:943,960`, `internal/ui/threadsview/model_test.go:335,350`. Worse than any other "declared twice" row here, and not a simple delete: each is an unexported helper private to its own package, so consolidating means standing up a shared test-support package first, same shape as the `filteredNames`/`containsName` problem below |
+| Type a string through the real key-`Update` loop | six independent helpers, none sharing a signature: `typeChars(t, m, s)` (`internal/ui/compose/model_test.go:468`), `typeText(m, s)` (`compose/channel_test.go:21`), `typeInto(t, c, s)` (`internal/ui/mode_insert_keys_test.go:71`), `typeIntoCompose(a, s)` (`compose_frecent_wiring_test.go:47`), `typeCommand(a, s)` (`mode_command_test.go:10`), `typeIntoFinder(a, s)` (`channel_finder_search_test.go:37`, returns the debounce messages fired). `mode_insert_keys_test.go` is a hash-pinned oracle — `typeInto` may be called or listed, but that file itself must not be edited |
 
 The `stripANSI` / `entriesFor` / `filteredNames` / `containsName` rows are the
 registration B34 found missing: all eight helpers
@@ -179,18 +185,27 @@ existed and none were listed, which is precisely the condition this table exists
 to prevent. Three of them had already been written twice by the time anyone
 noticed. Treat the "declared twice" notes as debt, not as license — the
 `filteredNames`/`containsName` pair sits inside the two packages this repo's
-fuzzy work set out to unify behind one matcher.
+fuzzy work set out to unify behind one matcher. `itoaU8`/`fmtRGBBg` is the same
+problem one level worse: four packages, not two.
 
 ### Known duplication — do not add to it
 
 These are tracked in the refactor plan and are being consolidated. Do not copy
 them as templates:
 
-- **11 `renderBox` implementations** and **7 `visibleWindow`** across the 13
-  modal packages. If you are building a modal, expect a shared chrome package to
-  land (Phase 4); coordinate rather than adding a twelfth copy.
-- **`messages.Model` and `thread.Model`** share 377 verbatim lines and 45
-  identically-named methods. `internal/ui/thread/lockstep_test.go` pins *render*
+- **11 `renderBox` implementations** and **7 `visibleWindow`**, mostly but not
+  cleanly across the 13 modal packages: one of the 11 `renderBox`es is in
+  `internal/ui/reactionsview/model.go:159`, which is not one of the 13; and
+  `channelpicker` and `mentionpicker` are 2 of the 13 that contribute neither
+  helper (they filter with plain prefix/substring matching instead). If you are
+  building a modal, expect a shared chrome package to land (Phase 4); coordinate
+  rather than adding a twelfth copy.
+- **`messages.Model` and `thread.Model`** share approximately 377 verbatim
+  lines (right order of magnitude; not exactly reproducible) and **55
+  identically-named methods, 48 of them exported** — `func (m *Model)
+  X(...)` declarations intersected between `internal/ui/messages/*.go` (97,
+  excluding `_test.go`) and `internal/ui/thread/*.go` (82, same exclusion).
+  `internal/ui/thread/lockstep_test.go` pins *render*
   parity in **one static state only**: 80×20 (`lockstepWidth`/`lockstepHeight`),
   chosen so neither pane scrolls — so no scroll offset, no scrollbar gutter, no
   search-term highlighting and no loading state is compared. The
@@ -205,8 +220,50 @@ them as templates:
   lockstep test to tell you when you forgot — within the limits above. Note that
   `TestLockstep_ReactionHitTestFrames` is a tripwire that fires on
   *convergence*: Phase 3 must delete it, not satisfy it.
+  One divergence the "identically-named" framing hides: `messages.Model.ClickAt(y
+  int) bool` (`internal/ui/messages/model.go:2554`) returns whether the click
+  landed, while `thread.Model.ClickAt(y int)` (`internal/ui/thread/model.go:1027`)
+  returns nothing. Same name, same receiver shape, different signature — a
+  consolidation that assumes signature parity across the 55 breaks here, and the
+  lockstep test cannot catch it because it compares rendered frames, not
+  signatures.
 - **`convertAndCacheHistory` / `fetchChannelMessages` / `fetchThreadReplies`** in
   `cmd/slk/main.go` have ~85% duplicated bodies.
+- **`internal/ui/newmessagepicker/filter.go:74`** hand-rolls a tiered matcher,
+  `matchTier` (prefix/substring/subsequence, mirroring `fuzzy.Match`'s tier
+  concept) plus its own `isSubsequence` at `:91`, both walking `strings.ToLower`
+  instead of `text.Fold`. That's a behavioral gap, not just duplication:
+  `strings.ToLower` does not fold accents, so this picker's matching diverges
+  from every other surface's. Of the 9 picker/finder packages
+  (`channelfinder`, `channelpicker`, `emojipicker`, `linkpicker`,
+  `mentionpicker`, `newmessagepicker`, `reactionpicker`, `themeswitcher`,
+  `workspacefinder`), 5 do not import `internal/fuzzy`. Do not read that as 5
+  offenders: `linkpicker` has no filtering concept at all, and `channelpicker`,
+  `themeswitcher` and `workspacefinder` do plain prefix-then-substring
+  filtering through the correct `text.Fold` — they just don't need a scored
+  matcher. `newmessagepicker` is the only one of the 5 that built a
+  competing tiered matcher from scratch. (It is not, as has been claimed
+  elsewhere, "the only package that skips `internal/fuzzy`" — four other
+  packages also skip it, without the behavioral gap.)
+
+**Suspected dead code — do not delete on sight.** `messages.RenderAttachments`
+(`internal/ui/messages/render.go:137`) has zero call sites anywhere in the
+repo, including its own package's tests. That is unusual enough to flag rather
+than assume: either something that used to call it was removed and it was
+missed, or a caller path exists that a plain grep for the identifier can't
+see. Confirm before removing it.
+
+**Scope gap: `cmd/slk` has no helper table.** `cmd/slk` carries 103 unexported
+top-level functions (`^func [a-z]`, excluding `_test.go`) across 39 non-test
+files and, unlike every `internal/ui/*`
+package, none of them are tracked anywhere above — the only `cmd/slk` entries
+in this file are the composition-root description, the `-race` timing, the
+I/O-boundary note, one clipboard-writer row, and the
+`convertAndCacheHistory`/`fetchChannelMessages`/`fetchThreadReplies`
+duplication. The three-way timestamp duplication and the `RenderAttachments`
+gap above were both found by hand-checking claims about `internal/ui`; nobody
+has done the equivalent sweep for `cmd/slk`. Treat this as an open item, not
+something this pass closes.
 
 ## Conventions
 
