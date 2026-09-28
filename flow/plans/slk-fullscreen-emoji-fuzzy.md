@@ -329,6 +329,38 @@ _(populated by gotcha-coverage + re-runs)_
       (1 F2P / 9 P2P incl. the fullscreen suite), all three at
       `head=17d8594, dirty=0`.
 
+27. **B33 is closed, and closing it produced the cleanest example of the vacuity
+    trap in this whole plan — I wrote one while hunting them.** Two results, and
+    the second is the more useful.
+    - **The ranking was already correct.** B33 was a *coverage* gap, not a defect:
+      `emojipicker` does sort by `fuzzy.Tier` (`model.go:173-174`), it simply had
+      no test proving it for `TierWordPrefix` or `TierSquashedPrefix`. Four new
+      tests in `internal/ui/emojipicker/tier_order_test.go`.
+    - **My first draft of those tests was worthless, and passed.** It called
+      `fuzzy.Match` itself to compute each row's tier, then asserted the rows were
+      in non-decreasing tier order — i.e. it compared the matcher against itself
+      and never observed the model at all. Collapsing `TierWordPrefix` and
+      `TierSquashedPrefix` into `TierSubstring` *inside `model.filter`* left all
+      four GREEN. That is the exact regression B33 says nothing would catch, and
+      my test for B33 did not catch it either.
+    - The fix was to assert on **published row order**, the only thing the model
+      actually emits, and to exploit the model's documented tie-break
+      (`matches[i].idx < matches[j].idx`, "preserve input order") by listing the
+      WORSE-tier entry FIRST in each fixture. Correct tiering promotes the
+      better-tier entry past it; a collapse ties them, input order wins, the
+      assertion fails.
+    - Proven against two mutations, not one: (A) the two middle tiers collapsed
+      into `TierSubstring` → 2 of 4 fail; (B) the tier comparison deleted from the
+      sort entirely → 4 of 4 fail. The pre-existing `TestFuzzy_*` tests are green
+      under mutation A, which is the measurement that justifies B33 existing.
+    - **The transferable rule**, and it is sharper than "check your test can
+      fail": *a test must observe the value the production code published, never
+      recompute it from the same inputs.* Recomputation looks like verification
+      and is tautology. All three earlier instances in this plan are the same
+      error wearing different clothes — B13 recaptured a frame after the event,
+      B45 read a model field instead of the frame, B46 asked a golden to prove a
+      hit-test. Name the observation channel before writing the assertion.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
