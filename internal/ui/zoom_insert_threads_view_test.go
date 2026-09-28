@@ -58,6 +58,11 @@ import (
 // be confused with the zoom toggle.
 const threadsInsertToken = "badger"
 
+// threadsNoComposeToast is the exact text `i` raises in ViewThreads when no
+// compose box is drawn. Kept as a constant so a production reword fails this
+// test loudly instead of turning the toast assertion into a silent no-op.
+const threadsNoComposeToast = "No message box in Threads view"
+
 func threadsViewSummaries() []cache.ThreadSummary {
 	return []cache.ThreadSummary{
 		{ChannelID: "C1", ThreadTS: "1.0", ParentTS: "1.0", ParentText: "first", ReplyCount: 1, ChannelName: "general"},
@@ -84,6 +89,14 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 		// wantInFrame: assert the text is visible on screen. False only
 		// where NO compose box is drawn at all -- see the row's comment.
 		wantInFrame bool
+		// wantInsertMode: does `i` enter insert mode at all? True
+		// everywhere a compose box is drawn. False in the one state where
+		// none is, because `i` there now raises a toast and stays in
+		// ModeNormal rather than focusing a box on no frame. This was a
+		// bare precondition asserting ModeInsert unconditionally until the
+		// toast landed; it is per-row now so the exception is visible in
+		// the table instead of being buried in a t.Fatalf.
+		wantInsertMode bool
 	}{
 		{
 			name:              "unzoomed side by side: thread drawn, types into the thread compose",
@@ -92,6 +105,7 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 			thread:            true,
 			wantThreadCompose: true,
 			wantInFrame:       true,
+			wantInsertMode:    true,
 		},
 		{
 			// THE DEFECT. Side by side unzoomed, so zoom promotes the
@@ -117,6 +131,7 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 			thread:            false,
 			wantThreadCompose: false,
 			wantInFrame:       false,
+			wantInsertMode:    false,
 		},
 		{
 			// The control that forbids "never trust the Threads view":
@@ -129,6 +144,7 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 			thread:            true,
 			wantThreadCompose: true,
 			wantInFrame:       true,
+			wantInsertMode:    true,
 		},
 		{
 			name:              "unzoomed stacked: thread drawn, types into the thread compose",
@@ -137,6 +153,7 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 			thread:            true,
 			wantThreadCompose: true,
 			wantInFrame:       true,
+			wantInsertMode:    true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -180,11 +197,34 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 			}
 
 			updateAndRender(t, a, keyPress('i'))
-			if a.mode != ModeInsert {
-				t.Fatalf("precondition: 'i' left mode=%v, want ModeInsert", a.mode)
+			if got := a.mode == ModeInsert; got != tc.wantInsertMode {
+				t.Fatalf("'i' left mode=%v (insert=%v), want insert=%v", a.mode, got, tc.wantInsertMode)
 			}
-			for _, r := range threadsInsertToken {
-				updateAndRender(t, a, keyPress(r))
+
+			// The token is only typed where a compose box is drawn. In the
+			// toast row `i` stays in ModeNormal, and every rune of
+			// "badger" is a live normal-mode binding there -- 'd' delete,
+			// 'e' edit, 'r' react among them -- so typing it would fire
+			// real side effects and the assertions below would be measuring
+			// those, not the insert route.
+			if tc.wantInsertMode {
+				for _, r := range threadsInsertToken {
+					updateAndRender(t, a, keyPress(r))
+				}
+			} else {
+				// Nothing was typed, so "the compose is empty" proves
+				// nothing here. What this row pins instead: the keystroke
+				// was refused VISIBLY, and focus was not parked on the pane
+				// the frame does not draw.
+				if plain := stripANSI(a.View().Content); !strings.Contains(plain, threadsNoComposeToast) {
+					t.Errorf("`i` was swallowed with no feedback: toast %q is absent from the frame.\n"+
+						"ViewThreads draws no compose box in this state, so `i` must say so "+
+						"rather than focusing a box on no frame.\n%s", threadsNoComposeToast, plain)
+				}
+				if a.compose.Value() != "" || a.threadCompose.Value() != "" {
+					t.Errorf("no key was typed after `i`, yet a compose holds text: channel=%q thread=%q",
+						a.compose.Value(), a.threadCompose.Value())
+				}
 			}
 
 			gotChannel, gotThread := a.compose.Value(), a.threadCompose.Value()
@@ -201,12 +241,19 @@ func TestZoomInsert_ThreadsViewRoutesToTheDrawnPane(t *testing.T) {
 						"is on no frame and the keystroke is silently lost.",
 						threadsInsertToken, gotChannel, gotThread)
 				}
-				if a.focusedPanel == PanelThread {
-					t.Errorf("focus=%v after 'i', but zoom does not draw the thread pane. "+
-						"Eight production sites route on focusedPanel == PanelThread; "+
-						"leaving focus here re-arms every one of them at an undrawn pane.",
-						a.focusedPanel)
-				}
+			}
+
+			// Focus must never be parked on a pane the frame does not draw,
+			// in EITHER branch. This is checked outside the typing split
+			// because it is the invariant 1faa1fb established and it holds
+			// whether or not `i` was accepted -- eight production sites
+			// route on focusedPanel == PanelThread, and none of them care
+			// how focus got there.
+			if !tc.thread && a.focusedPanel == PanelThread {
+				t.Errorf("focus=%v after 'i', but the frame does not draw the thread pane. "+
+					"Eight production sites route on focusedPanel == PanelThread; "+
+					"leaving focus here re-arms every one of them at an undrawn pane.",
+					a.focusedPanel)
 			}
 
 			if tc.wantInFrame {
