@@ -361,6 +361,43 @@ _(populated by gotcha-coverage + re-runs)_
       B45 read a model field instead of the frame, B46 asked a golden to prove a
       hit-test. Name the observation channel before writing the assertion.
 
+28. **B27 is closed (`3a6d285`, lane `slkfz/lane-sep`), and it CHANGED RANKING —
+    "no legacy tests failed" is true and does not mean what it sounds like.** The
+    three definitions of a word boundary are now one exported
+    `fuzzy.IsSeparator`; `WordPrefix`'s inline `[]string{" ", "-", "_", "."}` and
+    `SquashedPrefix`'s `FieldsFunc` closure both call it.
+    - **The lane took the widening, not the narrowing.** Unification had two
+      answers and they are not equivalent: `isSeparator` (subsequence scoring)
+      already counted `/` and `:`; the two prefix tiers did not. Keeping the wider
+      set makes `/` and `:` boundaries for `WordPrefix` and `SquashedPrefix`,
+      where they previously were not. Concretely, `WordPrefix("eng/platform",
+      "platform")` was **false** — none of `" platform"`, `"-platform"`,
+      `"_platform"`, `".platform"` occurs in it — and is now **true**, promoting
+      that row from `TierSubstring` (4) to `TierWordPrefix` (2).
+    - **No pre-existing test failed because no pre-existing test used `/` or `:`
+      as data.** Verified, not assumed: `internal/fuzzy/fuzzy_test.go` contains no
+      slash or colon inside any fixture string. So the green suite records that the
+      widened region was *untested*, not that behaviour held. The only coverage it
+      now has is the oracle's own
+      `TestWordPrefix_TreatsColonAndSlashAsBoundaries`, which asserts `skin:tone`
+      /`tone` and `a/b-thing`/`b` true, `plain_name`/`name` still true, and
+      `nobreakhere`/`here` false.
+    - **Reach, by call site** (`fuzzy.Match`/`WordPrefix`/`SquashedPrefix` have
+      exactly four non-test callers): `emojipicker` and `reactionpicker` match
+      shortcodes, which contain only `_`, `-`, `+`, so they cannot be affected.
+      `channelfinder` matches `Name`, which for channels cannot contain `/` or `:`
+      but for DM/mpdm rows is a human display name, which can. `mentionpicker`
+      matches display names directly and is the most exposed — a name like
+      `Jane Doe / Platform` or `ops:oncall` now word-prefix-matches on the segment
+      after the separator.
+    - **This is a deliberate behaviour change, made by the lane and accepted here,
+      not a refactor.** It is recorded rather than re-litigated because the wider
+      set is the one the subsequence tier has always used, so unifying downward
+      would have *narrowed* an existing tier to match two narrower ones — losing
+      behaviour to gain consistency. If the promotion turns out to be unwanted in
+      `mentionpicker`, the fix is a per-call-site separator set, not re-splitting
+      the predicate.
+
 19. **The live capability suite's "restored frame differs" line is NOT
     `fs-restore-eq` failing** — recorded so nobody chases it. Step 4 of
     `capability-test.sh` drives the real binary against a real workspace, so
