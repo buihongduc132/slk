@@ -1543,3 +1543,148 @@ _(populated by gotcha-coverage + re-runs)_
     as deliberate, on the grounds that the sidebar is not a keystroke sink. Not a
     defect, but it is the one place focus legitimately sits on something zoom does
     not draw, and it is specified only in a comment plus an indirect test.
+
+
+49. **I MERGED AN EDIT TO A HASH-PINNED ORACLE, and the pin caught it only
+    because I re-checked afterwards.** Reverted in `bcd6cb3`. This is the most
+    important entry of the three because the rule it broke is the one this
+    document states most emphatically, and I broke it in the *prompt*, not in a
+    moment of carelessness at the keyboard.
+
+    **What happened.** I dispatched a lane to close the two remaining lint
+    findings and named the files: `internal/ui/mode_normal.go` (S1040) and
+    `internal/ui/toast_consolidation_test.go` (SA1019). The second is pinned by
+    `gates/toast/oracle.sha256`. The lane did exactly as told and rewrote it; I
+    verified its work on three axes — commit shape, discrimination, lint output —
+    and merged it as `39a1b97`. The axis I did not check was the pin list.
+
+    **Why my own checks missed it.** I checked that lane against `flow/plans`,
+    `.golangci.yml`, `go.mod` and `go.sum`. All four passed. None of them is the
+    pin list. I had been carrying a hand-written "forbidden files" list per lane
+    instead of reading `gates/*/oracle.sha256`, which is the authority.
+
+    **What would have caught it, and why it did not run.** `gates/toast/gate.sh`
+    verifies oracle hashes and exits **2** (INVALID) on a mismatch — I confirmed
+    the mechanism afterwards: `GATE: oracle hashes verified (1 files)`. So
+    `verify-commit.sh` on `39a1b97` would have scored the toast lane INVALID
+    immediately. I did not run it. I ran build/vet/gofmt/lint after that merge
+    and deferred `-race` and the seven lanes to "the final combined head",
+    reasoning that repeated full runs were wasteful. **Fast gates do not check
+    pins.** Deferring the slow gate deferred the only check that enforces the
+    rule.
+
+    **The remedy, and what it costs.** The S1040 half is KEPT (production code,
+    unpinned, verified). The SA1019 half is reverted, so **lint is at 1 finding,
+    not 0**. I did not re-pin the hash to match the edit — OT17 forbids it, and a
+    fix that reshapes the oracle judging it is exactly what the pin exists to
+    prevent. Closing SA1019 needs that oracle deliberately retired or re-pinned,
+    which is the user's call and not mine.
+
+    **The generalisable lesson.** "I checked four things and they all passed" is
+    not evidence when the list of four was written from memory. Read the
+    authority. And a per-lane quality check is not a substitute for the gate: the
+    lane's rewrite was *good* — stdlib-only, no new dependency, and I proved it
+    still discriminated by injecting a duplicate helper — and none of that
+    mattered.
+
+
+50. **The `time.Local` CI race from item 47 is FIXED (merged as `cf8c11a`), and
+    the fix had to go at the write end.** `TestNewGoldenApp_RenderIsTimezoneIndependent`
+    assigned the process-global `time.Local` in a loop; a package-level
+    `goldenZone` now holds the test's zone and the test mutates that instead.
+    `time.Local` is never written, so there is nothing for the runtime's timer
+    goroutines to race.
+
+    **Why the reader end was never an option — measured, not argued.** There are
+    **121** production reads of `time.Local`/`time.Now()` in this repo, plus the
+    runtime's own `time.sendTime` goroutines, which is what every captured stack
+    showed as the reader. Chasing readers cannot terminate.
+
+    **My verification, 20 builds at the shape that produced the flake:**
+    **5/20 → 0/20**, zero `DATA RACE` logs, same machine and same 59-test subset.
+
+    **Two production readers were threaded through the clock**, and neither
+    changes user-visible behaviour: `messages/model.go`'s
+    `time.Unix(sec,0).Format(...)` → `.In(nowFunc().Location())`, and
+    `peerstatus`'s `s.DNDEnd.Local()` → `.In(now.Location())`. `var nowFunc =
+    time.Now`, so in production `nowFunc().Location()` **is** `time.Local`; they
+    diverge only when a test pins the clock, which is the point.
+
+    **DISCRIMINATION CHECKED PER READER, AND IT WAS SPLIT.** This is the part
+    worth keeping. Reverting `messages/model.go` fails the golden test with a
+    legible diff (`── Yesterday ──` vs `── Today ──` under Pacific/Honolulu).
+    Reverting `peerstatus` left the golden test **passing** *and* its own package
+    test passing — **unasserted**.
+
+    **A THREE-LAYER VACUITY, the third layer mine** (`6e9d983` closes it):
+
+    | attempted expectation | why it proved nothing |
+    |---|---|
+    | `want: end.Local()` | agrees with the bug it should catch |
+    | `want: end.In(testNow.Location())` | `testNow = time.Unix(...)`, and `time.Unix` returns a **local-zone** Time, so this collapses to the row above |
+    | `testNow` re-based on `FixedZone(+7h)` — **my fix** | this machine's local offset **is** `+0700`; the formatted strings were byte-identical |
+
+    The pattern: **any assertion naming ONE zone can accidentally name the
+    ambient one.** So the replacement names none — it hands `Summary` the same
+    instant as two explicit clocks 9h apart and requires the renderings to
+    differ, then checks each is the right wall clock for its own zone. Machine-
+    and TZ-independent. Proven both ways: green as written, and with production
+    reverted to `.Local()` it fails with both zones collapsing to `06:13`.
+
+    I reverted my own `testNow` edit rather than keep it, because the comment I
+    had written on it claimed a property it did not have.
+
+    **A process note.** This lane wedged before reporting: my prompt told it to
+    run 15 `-race` iterations, and the `agy-fanout` skill explicitly says to ban
+    slow commands and full test gates from an agy job because a backgrounded slow
+    command hangs the agent. The skill warned me in advance and I wrote the slow
+    command into the job anyway. It had already committed, so the work was
+    harvested and the process killed; its own loop result is unused.
+
+
+51. **`i` in ViewThreads now says so instead of swallowing the keystroke (merged
+    as `425eccc`, test corrected in `fe772e4`) — UNDER A STATED ASSUMPTION, not a
+    settled decision.** Of the three candidates item 46 left open, this takes the
+    middle one: `i` raises a status-bar toast and stays in `ModeNormal`. It is the
+    minimal reversible option, one clause to delete if the answer turns out to be
+    "the threads list should have a compose box". **That product question is NOT
+    decided here** and no layout changed.
+
+    **What made the toast correct rather than cosmetic.** `SetMode(ModeInsert)`
+    moved from the top of the insert arm into each of the two branches that
+    actually focus a compose. Left at the top, an early `return` on the toast path
+    would have put the app in insert mode with no box — a different silent loss.
+    Verified by reading the resulting code, not the diff.
+
+    **A SECOND ENTRY PATH the lane found and I had not scoped.** `E` (Edit): in
+    ViewThreads with focus off the thread panel, `beginEditOfSelected` resolves
+    through `messagepane`, which remembers the last viewed channel — so `E` would
+    silently edit an **off-screen message** and enter insert mode on the invisible
+    compose. Same guard, same toast. `E` with `PanelThread` focused still works,
+    because that resolves the drawn thread compose. Worth recording as a general
+    shape: when a key is guarded for one view, ask which *other* keys reach the
+    same undrawn target.
+
+    **The pinned-test tension, and my own error inside it.** The lane left
+    `zoom_insert_threads_view_test.go` failing rather than edit a file I had
+    declared off-limits, and said so plainly. That was the right call on the
+    instruction I gave — and the instruction was **wrong**: I checked the ten
+    hash-pinned oracles and that file is not among them. I over-restricted it,
+    then corrected the stale assertion myself.
+
+    **The correction is more than a flipped expectation.** `wantInsertMode` is now
+    per-row, so the exception lives in the table rather than in a `t.Fatalf`. And
+    the token is **no longer typed in the toast row**: `i` leaves `ModeNormal`
+    there, and every rune of `"badger"` is a live normal-mode binding — `d`
+    delete, `e` edit, `r` react — so typing it would fire real side effects and
+    the assertions would have measured those instead of the insert route. Two
+    assertions were restructured rather than kept: "nothing landed in
+    threadCompose" is now inside the typed branch only (with nothing typed, an
+    empty compose is a vacuous pass), and the focus check moved **out** of the
+    branch keyed on whether the frame draws the thread pane, because it is
+    `1faa1fb`'s invariant and holds whether or not `i` was accepted.
+
+    The toast text is a constant, so a production reword fails the test instead of
+    turning the assertion into a no-op. **Proven discriminating both ways:**
+    removing the toast clause fails the row; rewording the toast to `"Nope"` fails
+    it too, naming the missing string.
