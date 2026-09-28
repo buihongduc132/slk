@@ -1731,3 +1731,69 @@ _(populated by gotcha-coverage + re-runs)_
     agent reshaping its own spec three times in this effort — but the cost is real
     and should be discharged by retiring the scaffold on purpose, never by
     case-by-case exceptions each of which looks individually reasonable.
+
+
+53. **CORRECTION TO ITEMS 43, 46, 51 AND 52: the ViewThreads compose box was
+    NEVER an open product question. The spec decided it on 2026-04-28.** Closed
+    in `60bb688`. Those four items each describe it as awaiting a user decision,
+    and I twice presented it to the user that way. All of that framing is wrong.
+
+    **What `docs/superpowers/specs/2026-04-28-threads-view-design.md` says**,
+    three places, consistently:
+
+    - *"The bottom compose box is hidden in this view. Replies are sent via the
+      existing thread panel's compose (focus moves to it on `Enter` from the
+      list — see Keybindings)."*
+    - *"the bottom compose region is omitted (the right thread panel's compose is
+      the only entry point)"*
+    - Keymap: `` `Enter` | Threads view focused | Move focus to right thread panel (for replying) ``
+
+    **How I got it wrong.** I measured the rendered frame, found no compose box
+    in ViewThreads, and inferred a gap in the design. The measurement was
+    correct; the inference was not. There is a dedicated design doc for this
+    view and I never opened it — I searched the *plan* for prior discussion and
+    treated its silence as the absence of a decision. **A design doc is not
+    optional reading before declaring something undecided.** This is the second
+    time in this effort the same shape has cost me: OT28 was published wrong
+    because I reasoned about what Slack permits instead of running one SQL query
+    against the real cache.
+
+    **The consequence for the shipped toast.** It was wrong by omission — it said
+    there is no message box and stopped, when the spec says there *is* a route.
+    Worse, one string served two conditions with **different remedies**:
+
+    | condition | reached by | remedy |
+    |---|---|---|
+    | `!threadVisible` | `i` or `E` straight from the list, either width, zoomed or not | press `Enter` to open a thread |
+    | `threadVisible`, thread not focusable | only side-by-side after `Enter`, where zoom promotes messages | exit zoom |
+
+    Measured, those are the only two reachable conditions. And both exits from
+    zoom restore the route: `z` again and `Esc` each hand focus back to the
+    thread, after which typing lands in `threadCompose` and renders — so "exit
+    zoom" is actionable, not a description of a dead end. Naming the wrong remedy
+    is worse than naming none, so there are two strings now, selected on
+    `threadVisible`, behind one helper so the two call sites cannot drift.
+
+    **The lane's test looked like four-state coverage and was not.** All four rows
+    set `threadVisible=false` (no `Enter`, `withThreadsView(nil)`), so the
+    `zoomed` dimension never reached the branch it named: every row exercised the
+    same condition and asserted the same string. Rows now declare which toast
+    they expect, with `""` meaning `i` must be **accepted** — two such rows, which
+    is what keeps the guard from being too broad. It also assigned
+    `a.zoomed = true` directly, which AGENTS.md forbids because `enterZoom` also
+    snapshots the viewport and normalises focus; zoom is now entered with a real
+    `z`. The `E` test asserted only mode, so `E` doing nothing at all would have
+    passed it; it now asserts the toast, asserts the *other* remedy is absent,
+    and carries a `ViewChannels` control.
+
+    **Proven discriminating by two mutations**, and the second is the one that
+    matters: collapsing both remedies into one string FAILS, and *inverting* the
+    `threadVisible` condition also FAILS. The inversion keeps both strings and
+    only swaps which state gets which, so it proves the tests pin the **mapping**
+    rather than merely the text.
+
+    **One observation recorded because it happened live rather than in theory.**
+    My scratch probe typed `"otter"` while in `ModeNormal` and the `r` fired the
+    react binding (`mode=REACT`). That is the exact hazard I had only *reasoned*
+    about when restructuring the pinned test in item 51. Never type words in
+    normal mode in a test.
