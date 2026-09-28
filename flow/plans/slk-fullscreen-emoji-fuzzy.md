@@ -2606,3 +2606,54 @@ _(populated by gotcha-coverage + re-runs)_
     symbols it claimed to cover. Kept as a file rather than deleted so the
     reference in item 62 resolves to the reason. **A regex is not a parser**; the
     replacement walks the module with `go/ast`.
+
+65. **The audit's third SUSPECTED VACUOUS entry is refuted by measurement, and
+    the gap it actually has was already covered — by a test I would have
+    duplicated if I had not grepped first.**
+
+    The entry: `TestFuzzy_RocketReachableBySubsequence`
+    (`emojipicker/fuzzy_test.go:83`), called "fixture-constrained, so its
+    presence assertion can only fail on total absence, not mis-ranking."
+
+    **Measured instead of reasoned** (scratch probe, run and deleted): **7 of the
+    9 fixture entries match `rkt`**, all at `TierSubsequence`, against
+    `MaxVisible=5` — so the cap is ACTIVE, and two entries really are evicted
+    (`broken_heart` score 43, `sparkling_heart` 42). `rocket` is kept at **rank 2**
+    by score 80, behind `bookmark_tabs` at 92. So the test fails if `rocket`'s
+    score drops far enough to put it below rank 5 of 7, not only on total
+    absence. The claim is overstated: there is real, if narrow, mis-ranking
+    sensitivity, with an 80-vs-55 margin to fifth place.
+
+    **The gap the measurement DID expose is a different one, and it is covered.**
+    Every matching entry in that fixture is tier 5, so the fixture has no
+    higher-tier competitor — which is exactly the configuration the live
+    workspace has, where five `cmd-pallet-*worktree*` customs are
+    `TierSubstring(4)` because `rkt` is contiguous inside `worktree`, and they
+    evict `rocket` under the cap. I was about to write that test.
+    `internal/ui/emojipicker/rkt_corpus_eviction_test.go`
+    (`TestOT6_RktEvictsRocketOnRealCorpusShape`) already asserts it, on a
+    real-corpus-shaped fixture, and asserts the **eviction** rather than the DOD
+    example "because the eviction is what is true".
+
+    **AGENTS.md's opening rule, paying for itself in the same session that gave
+    it a test.** One grep for `TierSubstring` across `_test.go` found it. Had I
+    trusted the audit's framing and started writing, the result would have been a
+    ninth instance of the defect the file exists to prevent — and the twelfth
+    entry in the duplication list, not a new guard.
+
+    **One genuine cross-check fell out of it.** OT6's fixture asserts
+    `entries[len(entries)-1].Name == "rocket"` as a hard precondition, and item
+    63 changed the very sort that ordering comes from (raw bytes → `Fold` with a
+    raw-`Name` tie-break). Verified at HEAD: OT6 still PASSES. It holds because
+    every name in that fixture is lowercase, where `Fold` is the identity — the
+    same property that keeps the pre-existing
+    `TestBuildEntries_AlphabeticalOrder` green, now confirmed from a second,
+    independent direction. **A fix verified only through its own new tests is
+    verified once; this is the check that someone else's precondition still
+    holds.**
+
+    All three of the audit's SUSPECTED VACUOUS entries now settled: two were
+    already remediated by sibling files written for exactly that reason
+    (`zoom_autoclear_state_test.go`, `startup_emoji_order_test.go`, each saying so
+    in its own header), and this third is refuted and separately covered. All
+    three pass at HEAD.
