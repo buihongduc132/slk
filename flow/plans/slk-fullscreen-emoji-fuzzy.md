@@ -1061,3 +1061,113 @@ _(populated by gotcha-coverage + re-runs)_
     those names exercise — `rkt` contiguous inside `worktree` — is exact; the
     names are representative. The live half of the question was already closed
     under B4 and needed no re-run.
+
+
+40. **B24 is closed (`72c8b2d` + `2704515`), and OT12's "DECISION NEEDED" is
+    answered NO — there was no spec conflict to decide.** OT12 flagged that
+    wiring frecent into `emojipicker` "changes ranking users see and existing
+    tests pin the current order". The first half is true; the second half does
+    not follow, and checking it was the whole job.
+
+    **The premise held.** A frecency mechanism already existed and was reused,
+    not rebuilt: `frecent_emoji` in `internal/cache/frecent.go`
+    (`RecordEmojiUse` / `GetFrecentEmoji`, with a `use_count / (1 + age_days)`
+    decay), exposed as `core.ReactionService.LoadFrecent` / `RecordFrecent`
+    (`internal/core/ports.go`), adapted in `internal/core/adapters.go`, and
+    supplied in `cmd/slk/main.go`. `reactionpicker.Model.filter()` already
+    implemented the DOD's exact rule — recency rank, then tier, then
+    subsequence score, then input order. So this was not "implement frecency",
+    it was "the second consumer was missing". Nothing new was invented.
+
+    **The DOD, verbatim** (line 77): "`emojipicker.Model.filter()` ranks:
+    recent (frecent) > prefix > substring > subsequence, case/accent-folded,
+    keeping `MaxVisible` cap and input-order stability within a tier; compose
+    autocomplete (`:` trigger) and reaction picker get the same ranking." Line
+    31 repeats the order in the DOD proper. So yes — "recent" FIRST really does
+    outrank tier, as OT12 read it. Gotcha G11 narrows what it means: "'recent'
+    = matching entries ∩ frecent only (stale/global frecent names skipped —
+    frecent_emoji has no team column)". That intersection clause is what makes
+    the change safe.
+
+    **Why the pinning tests never conflicted.** `tier_order_test.go`'s four
+    fixtures and all of `fuzzy_test.go` construct their models with
+    `New()` + `SetEntries` + `SetQuery` and never establish any usage history.
+    With an empty frecent list every candidate's rank is -1, the first two
+    comparison clauses are no-ops, and the sort falls through to the untouched
+    tier / score / input-order chain. Frecency-empty IS the state those tests
+    describe. All four stayed green unmodified, and no test in the repo was
+    edited or deleted to make room. OT12's worry was well-placed but the
+    conflict was hypothetical.
+
+    **Deliberate divergence from reactionpicker, recorded because it is a real
+    behavioural difference between the two surfaces and not an oversight.**
+    `reactionpicker` injects frecent names its own `allEmoji` does not carry, as
+    long as they have a glyph, because `frecent_emoji` is global with no team
+    column. `emojipicker` does NOT: only its own entries are candidates. The
+    dropdown's output is `:name:` inserted into a message, so a shortcode from
+    another workspace's customs would not resolve here — absent beats broken.
+    Pinned by `TestFrecent_UnknownFrecentNameIsNotInjected`.
+
+    **Also unchanged on purpose:** the empty-query branch. `reactionpicker`
+    shows the frecent list when the query is empty; `emojipicker` shows the
+    first N alphabetically, pinned by `TestEmptyQueryShowsFirstN` and
+    `TestFuzzy_EmptyQueryKeepsFirstN`. The DOD's ranking clause governs
+    `filter()`'s ranking of matches, not the no-query listing, and the `:`
+    trigger needs 2 query chars before it opens at all
+    (`maybeOpenEmojiPicker`), so the empty-query path is barely reachable in
+    compose. Left alone rather than quietly broadening the change.
+
+    **The seam.** `internal/ui` does no I/O, so the data is pushed:
+    `App.refreshComposeFrecent` calls `LoadFrecent(10)` and forwards to
+    `compose` + `threadCompose`. It runs at `SetReactionService` (startup) and
+    immediately after the `RecordFrecent` arm in `mode_reaction_picker.go`.
+    Push rather than pull because the compose dropdown opens inside compose's
+    own `:` key handling, which never reaches `App` — there is no per-open hook
+    to load from, and a per-keystroke `LoadFrecent` would put a cache read in
+    the render path. `TestTUIReachesTheAppOnlyThroughCore` stays green.
+
+    **Evidence.** RED first for the ranking change: `SetFrecentEmoji` was added
+    as an unconsulted setter so the two ordering tests failed on ORDER, not on
+    a missing symbol. The no-op and intersection tests passed from the start
+    and are mutation-proven instead — collapsing the tier comparison fails
+    `EmptyHistoryIsNoOp` (so it is not vacuous); prepending frecent
+    unconditionally fails all four intersection/injection tests. The three
+    wiring tests likewise: removing either `refreshComposeFrecent` call site
+    fails the corresponding test, and making empty history inject an entry
+    fails the rendered-frame no-op. Fixture tiers were measured against
+    `emoji.BuildEntries(nil)` rather than guessed (`ice_cream` Prefix,
+    `shaved_ice` WordPrefix, `ear_of_rice` Substring, `articulated_lorry`
+    Subsequence/51 for query "ice").
+
+    **Two things left open, deliberately.**
+    - **The recording side is still asymmetric.** Only the reaction picker
+      calls `RecordFrecent`. Selecting an emoji from the compose dropdown
+      (`compose.insertEmoji`) does not, so compose consumes the frecency signal
+      without contributing to it — a user who only ever inserts emoji by typing
+      `:` builds no history at all. The DOD asks for shared *ranking*, not
+      shared *recording*, so this is arguably out of scope; it is also the
+      obvious next question and would be a behaviour change of its own.
+    - **`TestFrecent_EmptyHistoryRendersIdentically` is weaker than it looks.**
+      It compares a model with `SetFrecentEmoji([]core.EmojiEntry{})` against
+      one that never set it, so both carry any mutation to the shared ranking
+      path and it survived the tier-collapse mutation. It pins "empty ==
+      unset", not absolute order; `TestFrecent_EmptyHistoryIsNoOp` is what pins
+      the order. Recorded so the next reader does not over-trust it.
+
+    **Not verified:** no manual/live run. Everything here is the automated
+    suite plus the mutations described. Also note the sort remains
+    `sort.SliceStable` over a comparison whose final clause is a unique index,
+    so it is already a total order; the `Stable` is now redundant but was left
+    as-is rather than changed inside a behaviour commit.
+
+    **A process note that cost real time and will recur.** The worktree this
+    ran in was created from `origin/main` (`2b43b29`), which predates the whole
+    fullscreen/emoji/fuzzy effort. In it `emojipicker.filter()` is still
+    `strings.HasPrefix`-only, `internal/fuzzy` does not exist, and neither
+    `tier_order_test.go` nor `fuzzy_test.go` is present — so the task's
+    description of current state read as false and B24 looked like a much
+    larger job. The work belongs to local `main` (`e779d03`), which is ahead
+    and unpushed; the branch was reset onto it before any code was written.
+    Any future agent worktree must be based on local `main`, not
+    `origin/main`, or it will investigate a tree that is missing the feature it
+    was sent to extend.
