@@ -56,6 +56,16 @@ import (
 // twin: the first width at which Compute has room for both content panes
 // once the 30-col sidebar and its 2-col border are gone.
 // firstSideBySideWidthNoSidebar-1 stacks.
+//
+// ASSERTED, not merely declared, by
+// TestZoomSidebarHidden_BoundaryWidthMovesWhenTheSidebarGoes. It has to
+// be: Go does not flag an unused package-level constant, so a geometry
+// number nothing references is a comment maintained by hand -- and this
+// file's header leans on it to argue the sidebar-shown constants do not
+// carry over. If minMsgWidth, minThreadW, the sidebar's 30 cols or the
+// border widths change, that test fails instead of this number silently
+// becoming a lie. Its sibling firstSideBySideWidth is asserted the same
+// way, by TestZoomFrontPane_G15_BoundaryWidth.
 const firstSideBySideWidthNoSidebar = 130
 
 // sidebarDecidesWidth sits inside the 130..161 band, where the panes stack
@@ -299,6 +309,79 @@ func TestZoomSidebarHidden_HidingTheSidebarFlipsThePromotedPane(t *testing.T) {
 				// never change under Tab (G15) -- including when the ring
 				// passes through the sidebar, which zoom does not draw.
 				assertFront(t, a, !tc.wantZoomThread, tc.wantZoomThread)
+			}
+		})
+	}
+}
+
+// TestZoomSidebarHidden_BoundaryWidthMovesWhenTheSidebarGoes makes
+// firstSideBySideWidthNoSidebar load-bearing.
+//
+// The number was previously declared and never referenced. Go does not
+// flag an unused package-level constant, so nothing would ever have caught
+// it going stale -- and this file's header cites it to argue that
+// zoom_front_pane_test.go's constants do not carry over. A geometry claim
+// maintained by hand is what AGENTS.md says to replace with a check.
+//
+// Two rows, one column apart, are the whole assertion: at
+// firstSideBySideWidthNoSidebar-1 the panes stack with the sidebar hidden,
+// and at firstSideBySideWidthNoSidebar they fit side by side. Each row
+// then re-runs at the SAME width with the sidebar SHOWN, where both must
+// stack -- which is what makes the constant's value matter rather than
+// just its existence. 129 and 130 both stack with the sidebar shown, so a
+// wrong constant cannot be rescued by the sidebar-shown half.
+//
+// The zoom consequence is asserted too, because the boundary is only
+// interesting here for what it does to zoom: the stacked side promotes the
+// THREAD (it is the pane drawn alone) and the side-by-side side promotes
+// MESSAGES (G15).
+func TestZoomSidebarHidden_BoundaryWidthMovesWhenTheSidebarGoes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		w    int
+		// With the sidebar HIDDEN: do both panes get a band unzoomed, and
+		// which pane does zoom then promote?
+		wantBothDrawnHidden bool
+	}{
+		{"one below the boundary stacks", firstSideBySideWidthNoSidebar - 1, false},
+		{"the boundary fits both", firstSideBySideWidthNoSidebar, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := stackedApp(t, tc.w)
+			hideSidebar(t, a)
+			updateAndRender(t, a, keyCode(tea.KeyEnter))
+			if a.focusedPanel != PanelThread {
+				t.Fatalf("precondition: focus=%v, want PanelThread", a.focusedPanel)
+			}
+
+			// Unzoomed, sidebar hidden: this IS the branch the constant names.
+			assertFront(t, a, tc.wantBothDrawnHidden, true)
+
+			// zoomFrontIsThread probes exactly this layout, so the boundary
+			// decides which pane `z` promotes.
+			wantZoomThread := !tc.wantBothDrawnHidden
+			if got := a.zoomFrontIsThread(); got != wantZoomThread {
+				t.Errorf("sidebar hidden at w=%d: zoomFrontIsThread() = %v, want %v",
+					tc.w, got, wantZoomThread)
+			}
+			updateAndRender(t, a, keyPress('z'))
+			assertFront(t, a, !wantZoomThread, wantZoomThread)
+
+			// The other half of "the boundary MOVED": at this same width the
+			// sidebar's 32 cols push the layout back to stacked, both sides
+			// of the boundary. Without this, a constant set anywhere in
+			// 121..161 would still satisfy the rows above.
+			b := stackedApp(t, tc.w)
+			updateAndRender(t, b, keyCode(tea.KeyEnter))
+			if !b.sidebarVisible {
+				t.Fatal("precondition: the sidebar-shown half started hidden")
+			}
+			assertFront(t, b, false, true)
+			if !b.zoomFrontIsThread() {
+				t.Errorf("sidebar shown at w=%d: zoomFrontIsThread() = false, want true -- "+
+					"with the sidebar shown this width must still stack, which is what makes "+
+					"%d the SIDEBAR-HIDDEN boundary rather than the shared one",
+					tc.w, firstSideBySideWidthNoSidebar)
 			}
 		})
 	}
