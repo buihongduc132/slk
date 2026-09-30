@@ -265,19 +265,19 @@ func TestNormalModeKeys(t *testing.T) {
 		// -------------------------------------------------------------
 		{
 			// mode_normal.go:42. The chord is disarmed and the
-			// transient "ctrl+w …" hint reverts to the resting hint
+			// transient "ctrl+alt+w …" hint reverts to the resting hint
 			// BEFORE the chord key is delegated. Asserting the hint
 			// (not just the flag) is what separates "consumed" from
 			// "never armed": the flag starts false either way.
-			name: "ctrl+w s: the pending-chord guard consumes the next key and restores the help hint",
+			name: "ctrl+alt+w s: the pending-chord guard consumes the next key and restores the help hint",
 			opts: []testOpt{withSize(200, 50)},
 			setup: func(t *testing.T, a *App) {
-				_ = dispatchModeKey(a, keyMod('w', tea.ModCtrl))
+				_ = dispatchModeKey(a, keyMod('w', tea.ModCtrl|tea.ModAlt))
 				if !a.pendingWinCmd {
-					t.Fatal("precondition: ctrl+w did not arm the chord")
+					t.Fatal("precondition: ctrl+alt+w did not arm the chord")
 				}
-				if !strings.Contains(statusbarText(a), "ctrl+w") {
-					t.Fatalf("precondition: statusbar = %q, want the ctrl+w hint", statusbarText(a))
+				if !strings.Contains(statusbarText(a), "ctrl+alt+w") {
+					t.Fatalf("precondition: statusbar = %q, want the ctrl+alt+w hint", statusbarText(a))
 				}
 			},
 			key:      keyPress('s'),
@@ -487,16 +487,16 @@ func TestNormalModeKeys(t *testing.T) {
 		// Arm 4: WindowPrefix `ctrl+w` (mode_normal.go:92)
 		// -------------------------------------------------------------
 		{
-			name:     "ctrl+w arms the window chord and shows the transient hint",
+			name:     "ctrl+alt+w arms the window chord and shows the transient hint",
 			opts:     normalOpts(),
-			key:      keyMod('w', tea.ModCtrl),
+			key:      keyMod('w', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if !a.pendingWinCmd {
 					t.Error("pendingWinCmd not armed")
 				}
-				if got := statusbarText(a); !strings.Contains(got, "ctrl+w") {
-					t.Errorf("statusbar = %q, want the \"ctrl+w …\" hint", got)
+				if got := statusbarText(a); !strings.Contains(got, "ctrl+alt+w") {
+					t.Errorf("statusbar = %q, want the \"ctrl+alt+w …\" hint", got)
 				}
 				if cmd != nil {
 					t.Errorf("cmd = %T, want nil", cmd)
@@ -640,7 +640,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+f opens the workspace search modal",
 			opts:     normalOpts(),
-			key:      keyMod('f', tea.ModCtrl),
+			key:      keyMod('f', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeWorkspaceSearch,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if !a.searchResults.IsVisible() {
@@ -697,7 +697,7 @@ func TestNormalModeKeys(t *testing.T) {
 						a.sidebarVisible, a.focusedPanel)
 				}
 			},
-			key:      keyMod('b', tea.ModCtrl),
+			key:      keyMod('b', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.sidebarVisible {
@@ -772,7 +772,7 @@ func TestNormalModeKeys(t *testing.T) {
 			name:     "ctrl+] closes a visible thread",
 			opts:     normalOpts(),
 			setup:    focusThreadPanel,
-			key:      keyMod(']', tea.ModCtrl),
+			key:      keyMod(']', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.threadVisible {
@@ -794,7 +794,7 @@ func TestNormalModeKeys(t *testing.T) {
 					t.Fatal("precondition: thread should start hidden")
 				}
 			},
-			key:      keyMod(']', tea.ModCtrl),
+			key:      keyMod(']', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.threadVisible {
@@ -811,7 +811,7 @@ func TestNormalModeKeys(t *testing.T) {
 			name:     "ctrl+h walks the nav history backward",
 			opts:     append(normalOpts(), withActiveTeam("T1"), navLookupOpt()),
 			setup:    seedNavHistory,
-			key:      keyMod('h', tea.ModCtrl),
+			key:      keyMod('h', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if cmd == nil {
@@ -835,7 +835,7 @@ func TestNormalModeKeys(t *testing.T) {
 					t.Fatal("precondition: could not step back before stepping forward")
 				}
 			},
-			key:      keyMod('k', tea.ModCtrl),
+			key:      keyMod('k', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if cmd == nil {
@@ -862,7 +862,7 @@ func TestNormalModeKeys(t *testing.T) {
 					t.Fatal("precondition: nav stack should start empty")
 				}
 			},
-			key:      keyMod('h', tea.ModCtrl),
+			key:      keyMod('h', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if cmd != nil {
@@ -1151,7 +1151,7 @@ func TestNormalModeKeys(t *testing.T) {
 			name:     "ctrl+d scrolls the messages viewport down half a page",
 			opts:     normalOpts(),
 			setup:    scrollTo(0),
-			key:      keyMod('d', tea.ModCtrl),
+			key:      keyMod('d', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert:   wantYOffset(func(a *App) int { return a.halfPageSize() }),
 		},
@@ -1159,7 +1159,7 @@ func TestNormalModeKeys(t *testing.T) {
 			name:     "ctrl+u scrolls the messages viewport up half a page",
 			opts:     normalOpts(),
 			setup:    scrollTo(400),
-			key:      keyMod('u', tea.ModCtrl),
+			key:      keyMod('u', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert:   wantYOffset(func(a *App) int { return 400 - a.halfPageSize() }),
 		},
@@ -1193,7 +1193,7 @@ func TestNormalModeKeys(t *testing.T) {
 			name:     "ctrl+u that lands the viewport at the top kicks the history backfill",
 			opts:     normalOpts(),
 			setup:    scrollTo(1),
-			key:      keyMod('u', tea.ModCtrl),
+			key:      keyMod('u', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := a.messagepane.YOffset(); got != 0 {
@@ -1289,7 +1289,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+y opens the theme switcher scoped to the workspace",
 			opts:     activeTeamOpts(),
-			key:      keyMod('y', tea.ModCtrl),
+			key:      keyMod('y', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeThemeSwitcher,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if !a.themeSwitcher.IsVisible() {
@@ -1309,7 +1309,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+shift+y opens the theme switcher scoped globally",
 			opts:     normalOpts(),
-			key:      keyMod('y', tea.ModCtrl|tea.ModShift),
+			key:      keyMod('y', tea.ModCtrl|tea.ModAlt|tea.ModShift),
 			wantMode: ModeThemeSwitcher,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if !a.themeSwitcher.IsVisible() {
@@ -1330,7 +1330,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+s opens the presence menu",
 			opts:     activeTeamOpts(),
-			key:      keyMod('s', tea.ModCtrl),
+			key:      keyMod('s', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModePresenceMenu,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if !a.presenceMenu.IsVisible() {
@@ -1345,7 +1345,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+t opens the channel finder",
 			opts:     normalOpts(),
-			key:      keyMod('t', tea.ModCtrl),
+			key:      keyMod('t', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeChannelFinder,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if !a.channelFinder.IsVisible() {
@@ -1356,7 +1356,7 @@ func TestNormalModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+p is the alternate channel-finder binding",
 			opts:     normalOpts(),
-			key:      keyMod('p', tea.ModCtrl),
+			key:      keyMod('p', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeChannelFinder,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if !a.channelFinder.IsVisible() {
@@ -1373,7 +1373,7 @@ func TestNormalModeKeys(t *testing.T) {
 			// here, so the handler leaves the mode alone.
 			name:     "ctrl+n emits EnterNewMessageMsg and stays in Normal",
 			opts:     normalOpts(),
-			key:      keyMod('n', tea.ModCtrl),
+			key:      keyMod('n', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNormal,
 			assert: func(t *testing.T, _ *App, cmd tea.Cmd) {
 				if cmd == nil {

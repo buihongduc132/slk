@@ -116,7 +116,7 @@ func TestForwardMessageCancelRestoresSwitcher(t *testing.T) {
 			if cmd != nil || a.channelFinder.IsVisible() || a.mode != ModeNormal {
 				t.Fatal("cancel did not close picker without sending")
 			}
-			dispatchModeKey(a, keyMod('t', tea.ModCtrl))
+			dispatchModeKey(a, keyMod('t', tea.ModCtrl|tea.ModAlt))
 			if got := a.channelFinder.FilteredItems(); len(got) != 4 || !got[0].Synthetic {
 				t.Fatalf("normal switcher destinations not restored: %+v", got)
 			}

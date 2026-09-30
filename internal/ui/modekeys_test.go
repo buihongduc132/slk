@@ -93,7 +93,7 @@ func TestRunKeyCases_Harness(t *testing.T) {
 			// TestNewTestApp_WithWindowSplit sizes around.
 			opts: []testOpt{withSize(200, 50)},
 			setup: func(t *testing.T, a *App) {
-				_ = dispatchModeKey(a, keyMod('w', tea.ModCtrl))
+				_ = dispatchModeKey(a, keyMod('w', tea.ModCtrl|tea.ModAlt))
 				if !a.pendingWinCmd {
 					t.Fatal("precondition: ctrl+w did not arm the window chord")
 				}

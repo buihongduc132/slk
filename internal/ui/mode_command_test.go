@@ -149,7 +149,7 @@ func TestCommandMode_NonPrintableKeysAreDropped(t *testing.T) {
 		{"up", tea.KeyPressMsg{Code: tea.KeyUp}},
 		{"down", tea.KeyPressMsg{Code: tea.KeyDown}},
 		{"tab", tea.KeyPressMsg{Code: tea.KeyTab}},
-		{"ctrl+x", tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}},
+		{"ctrl+x", tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl | tea.ModAlt}},
 		{"shift+up", tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift}},
 	}
 	for _, k := range keys {

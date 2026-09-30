@@ -53,7 +53,7 @@ func TestZoom_SuppressionToastIsVisibleInTheZoomedFrame(t *testing.T) {
 
 	// The subject.
 	a.enterZoom()
-	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
 	if got := frameText(a); !strings.Contains(got, suppressToastProbe) {
 		t.Errorf("zoomed: ctrl+b is suppressed but its toast is INVISIBLE (B45). The frame contains no %q.\n"+
 			"reduceZoom sets it on a.statusbar, but View() sets status := \"\" while zoomed and never "+
@@ -84,7 +84,7 @@ func TestZoom_ToastDefeatsTheScreenMemoWhileZoomed(t *testing.T) {
 		t.Fatalf("premise broken: two identical renders differ, so a frame delta cannot prove anything here")
 	}
 
-	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
 	withToast := frameText(a)
 
 	if withToast == clean {
@@ -100,7 +100,7 @@ func TestZoom_ToastDefeatsTheScreenMemoWhileZoomed(t *testing.T) {
 func TestZoom_ToastRowIsGoneAfterExitingZoom(t *testing.T) {
 	a := newTestApp(t, withSize(100, 30), withMessages(testMessageItems(60)...), withRender())
 	a.enterZoom()
-	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	_, _ = a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
 	_ = frameText(a)
 
 	a.statusbar.SetToast("")

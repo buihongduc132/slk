@@ -18,7 +18,7 @@ func TestNormalMode_ColonEntersCommandMode(t *testing.T) {
 
 func TestNormalMode_CtrlWNoLongerOpensWorkspaceFinder(t *testing.T) {
 	a := NewApp()
-	_ = handleNormalMode(a, tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
+	_ = handleNormalMode(a, tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl | tea.ModAlt})
 	if a.mode == ModeWorkspaceFinder {
 		t.Fatal("ctrl+w must not open the workspace finder (reclaimed as window prefix)")
 	}

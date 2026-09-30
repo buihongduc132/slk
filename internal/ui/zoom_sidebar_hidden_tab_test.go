@@ -82,7 +82,7 @@ func hideSidebar(t *testing.T, a *App) {
 	if !a.sidebarVisible {
 		t.Fatal("precondition: the sidebar is already hidden")
 	}
-	updateAndRender(t, a, keyMod('b', tea.ModCtrl))
+	updateAndRender(t, a, keyMod('b', tea.ModCtrl|tea.ModAlt))
 	if a.sidebarVisible {
 		t.Fatal("ctrl+b did not hide the sidebar")
 	}
@@ -237,7 +237,7 @@ func TestZoomSidebarHidden_CtrlBIsSuppressedWhileZoomed(t *testing.T) {
 				t.Fatalf("precondition: zoomed=%v sidebarVisible=%v", a.zoomed, a.sidebarVisible)
 			}
 
-			updateAndRender(t, a, keyMod('b', tea.ModCtrl))
+			updateAndRender(t, a, keyMod('b', tea.ModCtrl|tea.ModAlt))
 			if !a.sidebarVisible {
 				t.Errorf("ctrl+b hid the sidebar while zoomed. It is in zoomSuppresses, so "+
 					"the keypress must be swallowed; if that changed deliberately, the "+

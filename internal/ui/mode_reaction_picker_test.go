@@ -491,7 +491,7 @@ func TestReactionPickerModeKeys(t *testing.T) {
 			name:     "an unhandled modified key changes nothing",
 			opts:     reactionPickerOpts(false),
 			setup:    open,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeReactionPicker,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := modalRows(a.reactionPicker); got != 2 {

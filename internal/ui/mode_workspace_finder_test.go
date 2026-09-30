@@ -306,7 +306,7 @@ func TestWorkspaceFinderModeKeys(t *testing.T) {
 			name:     "ctrl+n moves the highlight like down",
 			opts:     workspaceFinderOpts(),
 			setup:    openWorkspaceFinder,
-			key:      keyMod('n', tea.ModCtrl),
+			key:      keyMod('n', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeWorkspaceFinder,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := modalHighlightedRow(t, a.workspaceFinder.View(120)); !strings.Contains(got, "beta") {
@@ -345,13 +345,13 @@ func TestWorkspaceFinderModeKeys(t *testing.T) {
 					t.Fatalf("precondition: highlighted row = %q, want %q after two downs", got, "gamma")
 				}
 				for range 2 {
-					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl))
+					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl|tea.ModAlt))
 				}
 				if got := modalHighlightedRow(t, a.workspaceFinder.View(120)); !strings.Contains(got, "alpha") {
 					t.Fatalf("precondition: highlighted row = %q, want %q: ctrl+p did not walk back to the top", got, "alpha")
 				}
 			},
-			key:      keyMod('p', tea.ModCtrl),
+			key:      keyMod('p', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeWorkspaceFinder,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := modalHighlightedRow(t, a.workspaceFinder.View(120)); !strings.Contains(got, "alpha") {
@@ -410,7 +410,7 @@ func TestWorkspaceFinderModeKeys(t *testing.T) {
 			name:     "an unhandled modified key changes nothing",
 			opts:     workspaceFinderOpts(),
 			setup:    openWorkspaceFinder,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeWorkspaceFinder,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := modalRows(&a.workspaceFinder); got != 3 {

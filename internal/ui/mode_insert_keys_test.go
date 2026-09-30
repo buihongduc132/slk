@@ -625,7 +625,7 @@ func TestInsertModeKeys(t *testing.T) {
 					return nil
 				})
 			},
-			key:      keyMod('v', tea.ModCtrl),
+			key:      keyMod('v', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := a.compose.Value(); got != "draft pasted" {
@@ -651,7 +651,7 @@ func TestInsertModeKeys(t *testing.T) {
 					return nil
 				})
 			},
-			key:      keyMod('v', tea.ModCtrl),
+			key:      keyMod('v', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := a.threadCompose.Value(); got != "reply pasted" {
@@ -675,7 +675,7 @@ func TestInsertModeKeys(t *testing.T) {
 					t.Fatal("precondition: clipboard should be unavailable on a fresh App")
 				}
 			},
-			key:      keyMod('v', tea.ModCtrl),
+			key:      keyMod('v', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := a.compose.Value(); got != "draft" {
@@ -697,7 +697,7 @@ func TestInsertModeKeys(t *testing.T) {
 				typeInto(t, &a.compose, "draft")
 				typeInto(t, &a.threadCompose, "reply")
 			},
-			key:      keyMod('u', tea.ModCtrl),
+			key:      keyMod('u', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := a.compose.Value(); got != "" {
@@ -719,7 +719,7 @@ func TestInsertModeKeys(t *testing.T) {
 				typeInto(t, &a.threadCompose, "reply")
 				typeInto(t, &a.compose, "draft")
 			},
-			key:      keyMod('u', tea.ModCtrl),
+			key:      keyMod('u', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := a.threadCompose.Value(); got != "" {
@@ -930,7 +930,7 @@ func TestInsertModeKeys(t *testing.T) {
 			name:     "ctrl+j inserts a newline in the channel compose",
 			opts:     insertOpts(),
 			setup:    func(t *testing.T, a *App) { typeInto(t, &a.compose, "line1") },
-			key:      keyMod('j', tea.ModCtrl),
+			key:      keyMod('j', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := a.compose.Value(); got != "line1\n" {
@@ -960,7 +960,7 @@ func TestInsertModeKeys(t *testing.T) {
 				showThread(t, a)
 				typeInto(t, &a.threadCompose, "line1")
 			},
-			key:      keyMod('j', tea.ModCtrl),
+			key:      keyMod('j', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeInsert,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := a.threadCompose.Value(); got != "line1\n" {

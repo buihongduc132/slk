@@ -157,11 +157,11 @@ func (m *Model) HandleKey(keyStr string) Action {
 		}
 		m.st = stateLoading
 		return ActionSubmit
-	case "up", "ctrl+k", "ctrl+p":
+	case "up", "ctrl+k", "ctrl+p", "ctrl+alt+k", "ctrl+alt+p":
 		if m.st == stateResults && m.selected > 0 {
 			m.selected--
 		}
-	case "down", "ctrl+j", "ctrl+n":
+	case "down", "ctrl+j", "ctrl+n", "ctrl+alt+j", "ctrl+alt+n":
 		if m.st == stateResults && m.selected < len(m.items)-1 {
 			m.selected++
 		}

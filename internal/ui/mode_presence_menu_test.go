@@ -386,7 +386,7 @@ func TestPresenceMenuModeKeys(t *testing.T) {
 			name:     "ctrl+n moves the cursor like down",
 			opts:     opts,
 			setup:    open,
-			key:      keyMod('n', tea.ModCtrl),
+			key:      keyMod('n', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModePresenceMenu,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				assertCommitsTo(t, a, presencemenu.ActionSetAway)
@@ -446,10 +446,10 @@ func TestPresenceMenuModeKeys(t *testing.T) {
 					_ = dispatchModeKey(a, keyCode(tea.KeyDown))
 				}
 				for range 2 {
-					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl))
+					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl|tea.ModAlt))
 				}
 			},
-			key:      keyMod('p', tea.ModCtrl),
+			key:      keyMod('p', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModePresenceMenu,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				assertCommitsTo(t, a, presencemenu.ActionSetActive)
@@ -500,7 +500,7 @@ func TestPresenceMenuModeKeys(t *testing.T) {
 			name:     "an unhandled modified key changes nothing",
 			opts:     opts,
 			setup:    open,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModePresenceMenu,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := modalRows(&a.presenceMenu); got != presenceMenuAllRows {

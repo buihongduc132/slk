@@ -383,7 +383,7 @@ func TestThemeSwitcherModeKeys(t *testing.T) {
 		{
 			name:     "ctrl+n moves the cursor like down",
 			setup:    openGlobal,
-			key:      keyMod('n', tea.ModCtrl),
+			key:      keyMod('n', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeThemeSwitcher,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				commitsTo(t, a, "Light")
@@ -437,10 +437,10 @@ func TestThemeSwitcherModeKeys(t *testing.T) {
 					_ = dispatchModeKey(a, keyCode(tea.KeyDown))
 				}
 				for range 2 {
-					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl))
+					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl|tea.ModAlt))
 				}
 			},
-			key:      keyMod('p', tea.ModCtrl),
+			key:      keyMod('p', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeThemeSwitcher,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				commitsTo(t, a, "Dracula")
@@ -491,7 +491,7 @@ func TestThemeSwitcherModeKeys(t *testing.T) {
 		{
 			name:     "an unhandled modified key changes nothing",
 			setup:    openGlobal,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeThemeSwitcher,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := modalRows(&a.themeSwitcher); got != len(themeSwitcherItems()) {

@@ -332,7 +332,7 @@ func TestNewMessageModeKeys(t *testing.T) {
 			name:     "ctrl+n moves the highlight like down",
 			opts:     newMessageOpts(),
 			setup:    openNewMessagePicker,
-			key:      keyMod('n', tea.ModCtrl),
+			key:      keyMod('n', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNewMessage,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := modalHighlightedRow(t, a.newMessagePicker.View(120)); !strings.Contains(got, "bob") {
@@ -376,13 +376,13 @@ func TestNewMessageModeKeys(t *testing.T) {
 					t.Fatalf("precondition: highlighted row = %q, want %q after two downs", got, "carol")
 				}
 				for range 2 {
-					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl))
+					_ = dispatchModeKey(a, keyMod('p', tea.ModCtrl|tea.ModAlt))
 				}
 				if got := modalHighlightedRow(t, a.newMessagePicker.View(120)); !strings.Contains(got, "alice") {
 					t.Fatalf("precondition: highlighted row = %q, want %q: ctrl+p did not walk back to the top", got, "alice")
 				}
 			},
-			key:      keyMod('p', tea.ModCtrl),
+			key:      keyMod('p', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNewMessage,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if got := modalHighlightedRow(t, a.newMessagePicker.View(120)); !strings.Contains(got, "alice") {
@@ -493,7 +493,7 @@ func TestNewMessageModeKeys(t *testing.T) {
 			name:     "an unhandled modified key changes nothing",
 			opts:     newMessageOpts(),
 			setup:    openNewMessagePicker,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeNewMessage,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := modalHighlightedRow(t, a.newMessagePicker.View(120)); !strings.Contains(got, "alice") {

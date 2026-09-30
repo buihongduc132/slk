@@ -167,7 +167,7 @@ func (a *App) enterZoom() {
 	// after the viewport snapshot, whose zoomFrontIsThread call must see
 	// the focus the user actually had.
 	a.normalizeZoomFocus()
-	// Zoom hides the status row, which is where the "ctrl+w …" / "g …"
+	// Zoom hides the status row, which is where the "ctrl+alt+w …" / "g …"
 	// hints live. Leaving a chord armed behind a hidden hint means the
 	// user's next keystroke is silently eaten as a window command.
 	a.disarmPendingChords()

@@ -172,7 +172,7 @@ func handleNormalMode(a *App, msg tea.KeyMsg) tea.Cmd {
 
 	case key.Matches(msg, a.keys.WindowPrefix):
 		a.pendingWinCmd = true
-		a.statusbar.SetHelpHint("ctrl+w …")
+		a.statusbar.SetHelpHint("ctrl+alt+w …")
 		return nil
 
 	case key.Matches(msg, a.keys.SearchMode):

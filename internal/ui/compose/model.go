@@ -1323,7 +1323,7 @@ func (m Model) renderBroadcastHint(width int, innerBG color.Color) string {
 		Foreground(styles.Accent).
 		Background(innerBG).
 		Width(width).
-		Render(fmt.Sprintf("↪ also send to #%s  (ctrl+o to cancel)", m.channelName))
+		Render(fmt.Sprintf("↪ also send to #%s  (ctrl+alt+o to cancel)", m.channelName))
 }
 
 func (m Model) View(width int, focused bool) string {

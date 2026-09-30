@@ -36,7 +36,7 @@ func newThreadBroadcastApp(t *testing.T) *App {
 func TestHandleInsertMode_CtrlOTogglesThreadBroadcast(t *testing.T) {
 	app := newThreadBroadcastApp(t)
 
-	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModAlt})
 	if !app.threadCompose.Broadcast() {
 		t.Fatal("ctrl+o should turn the thread broadcast toggle on")
 	}
@@ -48,13 +48,13 @@ func TestHandleInsertMode_CtrlOTogglesThreadBroadcast(t *testing.T) {
 		t.Fatal("plain typing should not clear the broadcast toggle")
 	}
 
-	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModAlt})
 	if app.threadCompose.Broadcast() {
 		t.Fatal("second ctrl+o should turn the toggle off")
 	}
 
 	// Toggle back on and send; the dispatched msg must carry Broadcast.
-	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModAlt})
 	cmd := app.handleInsertMode(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("Enter in insert mode should produce a send command")
@@ -137,7 +137,7 @@ func TestHandleInsertMode_CtrlOInactiveOnChannelCompose(t *testing.T) {
 	app.focusedPanel = PanelMessages
 	app.SetMode(ModeInsert)
 
-	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	app.handleInsertMode(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModAlt})
 	if app.compose.Broadcast() {
 		t.Error("channel compose must never expose a broadcast toggle")
 	}

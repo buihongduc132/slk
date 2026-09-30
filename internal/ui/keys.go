@@ -3,6 +3,16 @@ package ui
 
 import "charm.land/bubbles/v2/key"
 
+// KeyMap holds every user-facing binding. The ctrl-modified surface
+// lives entirely in the ctrl+alt+<key> namespace: herdr (the terminal
+// workspace manager slk runs inside) claims the bare-ctrl space
+// globally — ctrl+h/j/k/l pane focus, ctrl+s/ctrl+d splits, ctrl+z
+// zoom, ctrl+x copy mode, ctrl+p/ctrl+n workspace prev/next, ctrl+1..9
+// tab switch — and its prefix is ctrl+u, so a bare-ctrl binding here
+// could never fire under herdr. ctrl+alt+<key> is free in herdr,
+// wezTerm and the dy-plane stack. TestKeyMap_NoBareCtrlBindings in
+// keymap_namespace_test.go is the codified guard; keep the field list
+// there in sync when adding fields to this struct.
 type KeyMap struct {
 	Up                  key.Binding
 	Down                key.Binding
@@ -84,22 +94,24 @@ func DefaultKeyMap() KeyMap {
 		SearchMode:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		SearchNext:      key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),
 		SearchPrev:      key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "prev match")),
-		WorkspaceSearch: key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "search workspace")),
+		WorkspaceSearch: key.NewBinding(key.WithKeys("ctrl+alt+f"), key.WithHelp("ctrl+alt+f", "search workspace")),
 		Tab:             key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next panel")),
 		ShiftTab:        key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev panel")),
-		ToggleSidebar:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "toggle sidebar")),
+		ToggleSidebar:   key.NewBinding(key.WithKeys("ctrl+alt+b"), key.WithHelp("ctrl+alt+b", "toggle sidebar")),
 		SidebarGrow:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "widen sidebar")),
 		SidebarShrink:   key.NewBinding(key.WithKeys("["), key.WithHelp("[", "narrow sidebar")),
-		ToggleThread:    key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "toggle thread")),
-		FuzzyFinder:     key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "switch channel")),
-		FuzzyFinderAlt:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "switch channel")),
+		ToggleThread:    key.NewBinding(key.WithKeys("ctrl+alt+]"), key.WithHelp("ctrl+alt+]", "toggle thread")),
+		FuzzyFinder:     key.NewBinding(key.WithKeys("ctrl+alt+t"), key.WithHelp("ctrl+alt+t", "switch channel")),
+		FuzzyFinderAlt:  key.NewBinding(key.WithKeys("ctrl+alt+p"), key.WithHelp("ctrl+alt+p", "switch channel")),
 		Top:             key.NewBinding(key.WithKeys("g"), key.WithHelp("gg", "top")),
 		Bottom:          key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
 		PageUp:          key.NewBinding(key.WithKeys("pgup"), key.WithHelp("PgUp", "page up")),
 		PageDown:        key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("PgDn", "page down")),
-		HalfPageUp:      key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
-		HalfPageDown:    key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
-		Quit:            key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit (confirm)")),
+		HalfPageUp:      key.NewBinding(key.WithKeys("ctrl+alt+u"), key.WithHelp("ctrl+alt+u", "half page up")),
+		HalfPageDown:    key.NewBinding(key.WithKeys("ctrl+alt+d"), key.WithHelp("ctrl+alt+d", "half page down")),
+		// ctrl+alt+c and `Q` both route through the quit-confirm
+		// prompt; `Q` (capital) keeps working everywhere as before.
+		Quit:            key.NewBinding(key.WithKeys("ctrl+alt+c"), key.WithHelp("ctrl+alt+c / Q", "quit (confirm)")),
 		QuitConfirm:     key.NewBinding(key.WithKeys("Q"), key.WithHelp("Q", "quit (confirm)")),
 		CloseThreadView: key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "close thread view")),
 		Reaction:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "add reaction")),
@@ -115,20 +127,19 @@ func DefaultKeyMap() KeyMap {
 		MarkUnread:      key.NewBinding(key.WithKeys("U"), key.WithHelp("U", "mark unread")),
 		NextUnread:      key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "next unread channel")),
 		PrevUnread:      key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "prev unread channel")),
-		ActivityView:    key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "open activity")),
+		ActivityView:    key.NewBinding(key.WithKeys("ctrl+alt+a"), key.WithHelp("ctrl+alt+a", "open activity")),
 		ActivityUnread:  key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "Activity: toggle unread-only")),
-		// Keyless: ctrl+w is reserved as the window-command prefix
-		// (window-management design §4). The keyless binding never
-		// matches but keeps the help-overlay entry pointing at :ws
-		// (1-9 also switch workspaces directly).
+		// Keyless: no chord is bound; :ws (and 1-9 directly) switch
+		// workspaces (window-management design §4). The keyless
+		// binding keeps the help-overlay entry pointing at :ws.
 		WorkspaceFinder:     key.NewBinding(key.WithHelp(":ws", "switch workspace")),
-		NewMessage:          key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new message")),
-		ThemeSwitcher:       key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("ctrl+y", "switch theme (per workspace)")),
-		ThemeSwitcherGlobal: key.NewBinding(key.WithKeys("ctrl+shift+y"), key.WithHelp("ctrl+shift+y", "set default theme")),
-		PresenceMenu:        key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "set status")),
+		NewMessage:          key.NewBinding(key.WithKeys("ctrl+alt+n"), key.WithHelp("ctrl+alt+n", "new message")),
+		ThemeSwitcher:       key.NewBinding(key.WithKeys("ctrl+alt+y"), key.WithHelp("ctrl+alt+y", "switch theme (per workspace)")),
+		ThemeSwitcherGlobal: key.NewBinding(key.WithKeys("ctrl+alt+shift+y"), key.WithHelp("ctrl+alt+shift+y", "set default theme")),
+		PresenceMenu:        key.NewBinding(key.WithKeys("ctrl+alt+s"), key.WithHelp("ctrl+alt+s", "set status")),
 		ToggleSection:       key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "toggle section")),
-		NavBack:             key.NewBinding(key.WithKeys("ctrl+h"), key.WithHelp("ctrl+h", "navigate back")),
-		NavForward:          key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "navigate forward")),
+		NavBack:             key.NewBinding(key.WithKeys("ctrl+alt+h"), key.WithHelp("ctrl+alt+h", "navigate back")),
+		NavForward:          key.NewBinding(key.WithKeys("ctrl+alt+k"), key.WithHelp("ctrl+alt+k", "navigate forward")),
 		Help:                key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "show keybindings")),
 		SaveThread:          key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "save thread")),
 		ListReactions:       key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "list reactions")),
@@ -136,19 +147,19 @@ func DefaultKeyMap() KeyMap {
 		// binding; the Win* entries are keyless help-only bindings
 		// (same trick as WorkspaceFinder above) — actual dispatch of
 		// the chord key happens in handleWindowChord.
-		WindowPrefix: key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "window commands")),
-		WinSplit:     key.NewBinding(key.WithHelp("ctrl+w s / :sp", "split window")),
-		WinVSplit:    key.NewBinding(key.WithHelp("ctrl+w v / :vsp", "vertical split window")),
-		WinNavigate:  key.NewBinding(key.WithHelp("ctrl+w h/j/k/l", "focus window in direction")),
-		WinCycle:     key.NewBinding(key.WithHelp("ctrl+w w", "cycle windows")),
-		WinClose:     key.NewBinding(key.WithHelp("ctrl+w q / :q", "close window")),
-		WinOnly:      key.NewBinding(key.WithHelp("ctrl+w o / :only", "close other windows")),
+		WindowPrefix: key.NewBinding(key.WithKeys("ctrl+alt+w"), key.WithHelp("ctrl+alt+w", "window commands")),
+		WinSplit:     key.NewBinding(key.WithHelp("ctrl+alt+w s / :sp", "split window")),
+		WinVSplit:    key.NewBinding(key.WithHelp("ctrl+alt+w v / :vsp", "vertical split window")),
+		WinNavigate:  key.NewBinding(key.WithHelp("ctrl+alt+w h/j/k/l", "focus window in direction")),
+		WinCycle:     key.NewBinding(key.WithHelp("ctrl+alt+w w", "cycle windows")),
+		WinClose:     key.NewBinding(key.WithHelp("ctrl+alt+w q / :q", "close window")),
+		WinOnly:      key.NewBinding(key.WithHelp("ctrl+alt+w o / :only", "close other windows")),
 		// Insert mode, thread compose only: toggles Slack's
 		// "Also send to #channel" checkbox for the next reply.
 		// Alt+Enter sends and broadcasts in a single keystroke.
-		ToggleBroadcast: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o / alt+enter", "also send reply to channel")),
+		ToggleBroadcast: key.NewBinding(key.WithKeys("ctrl+alt+o"), key.WithHelp("ctrl+alt+o / alt+enter", "also send reply to channel")),
 		// Shadows the textarea's own ctrl+e (LineEnd); "End" still works.
-		OpenInEditor: key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "edit message in $EDITOR")),
+		OpenInEditor: key.NewBinding(key.WithKeys("ctrl+alt+e"), key.WithHelp("ctrl+alt+e", "edit message in $EDITOR")),
 		Zoom:         key.NewBinding(key.WithKeys("z"), key.WithHelp("z", " zoom pane")),
 	}
 }

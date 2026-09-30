@@ -2365,7 +2365,7 @@ func TestHandleInsertMode_CtrlU_ClearsCompose(t *testing.T) {
 	app.compose.SetValue("draft text")
 	app.compose.AddAttachment(core.PendingAttachment{Filename: "a.png", Size: 1})
 
-	app.handleInsertMode(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	app.handleInsertMode(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl | tea.ModAlt})
 
 	if app.compose.Value() != "" {
 		t.Errorf("expected compose cleared, got %q", app.compose.Value())
@@ -2464,7 +2464,7 @@ func TestNormalMode_CapitalQ_OpensConfirmPrompt(t *testing.T) {
 
 func TestHandleKey_CtrlC_OpensConfirmPromptInsteadOfQuitting(t *testing.T) {
 	app := NewApp()
-	cmd := app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	cmd := app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
 			t.Fatal("Ctrl+C should not quit immediately; expected confirm prompt")
@@ -2480,7 +2480,7 @@ func TestHandleKey_CtrlC_OpensConfirmPromptInsteadOfQuitting(t *testing.T) {
 
 func TestHandleKey_CtrlC_DoesNotReopenWhilePromptVisible(t *testing.T) {
 	app := NewApp()
-	app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl | tea.ModAlt})
 	if !app.confirmPrompt.IsVisible() {
 		t.Fatal("precondition: prompt should be visible")
 	}
@@ -2488,7 +2488,7 @@ func TestHandleKey_CtrlC_DoesNotReopenWhilePromptVisible(t *testing.T) {
 	// to handleConfirmMode (where Enter confirms and Esc cancels) and
 	// must not reopen the prompt or change state in a way that breaks
 	// it.
-	cmd := app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	cmd := app.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl | tea.ModAlt})
 	_ = cmd
 	if !app.confirmPrompt.IsVisible() {
 		t.Error("second Ctrl+C should leave the prompt up; not auto-cancel")
@@ -4108,7 +4108,7 @@ func TestCtrlHTriggersNavBack(t *testing.T) {
 	_, _ = app.Update(ChannelSelectedMsg{ID: "C1", Name: "a", Type: "channel"})
 	_, _ = app.Update(ChannelSelectedMsg{ID: "C2", Name: "b", Type: "channel"})
 
-	cmd := app.handleNormalMode(tea.KeyPressMsg{Code: 'h', Mod: tea.ModCtrl})
+	cmd := app.handleNormalMode(tea.KeyPressMsg{Code: 'h', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd == nil {
 		t.Fatal("expected cmd from ctrl+h dispatch")
 	}
@@ -4133,7 +4133,7 @@ func TestCtrlKTriggersNavForward(t *testing.T) {
 	_, _ = app.Update(ChannelSelectedMsg{ID: "C2", Name: "b", Type: "channel"})
 	app.navHistory.Stack("T1").cursor = 0
 
-	cmd := app.handleNormalMode(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl})
+	cmd := app.handleNormalMode(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd == nil {
 		t.Fatal("expected cmd from ctrl+k dispatch")
 	}

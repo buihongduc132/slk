@@ -38,9 +38,9 @@ func TestFullscreen_ZoomTransitionDisarmsWindowChord(t *testing.T) {
 
 	armChord := func(t *testing.T, a *App) {
 		t.Helper()
-		updateAndRender(t, a, keyMod('w', tea.ModCtrl))
+		updateAndRender(t, a, keyMod('w', tea.ModCtrl|tea.ModAlt))
 		if !a.pendingWinCmd {
-			t.Fatal("precondition: ctrl+w did not arm the chord")
+			t.Fatal("precondition: ctrl+alt+w did not arm the chord")
 		}
 	}
 

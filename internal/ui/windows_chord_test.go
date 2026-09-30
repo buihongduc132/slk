@@ -17,7 +17,7 @@ import (
 )
 
 func pressCtrlW(a *App) {
-	_ = handleNormalMode(a, tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
+	_ = handleNormalMode(a, tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl | tea.ModAlt})
 }
 
 func press(a *App, r rune) tea.Cmd {
@@ -134,13 +134,13 @@ func TestChord_HintLifecycle(t *testing.T) {
 
 	// Armed: prefix hint shown.
 	pressCtrlW(a)
-	if !strings.Contains(statusHint(a), "ctrl+w …") {
-		t.Fatalf("armed: want %q hint, got %q", "ctrl+w …", statusHint(a))
+	if !strings.Contains(statusHint(a), "ctrl+alt+w …") {
+		t.Fatalf("armed: want %q hint, got %q", "ctrl+alt+w …", statusHint(a))
 	}
 
 	// (a) Completed chord restores the default hint (not blanked).
 	_ = press(a, 'v')
-	if strings.Contains(statusHint(a), "ctrl+w …") {
+	if strings.Contains(statusHint(a), "ctrl+alt+w …") {
 		t.Fatalf("after chord: prefix hint must clear, got %q", statusHint(a))
 	}
 	if !strings.Contains(statusHint(a), "? for keybindings") {
@@ -150,7 +150,7 @@ func TestChord_HintLifecycle(t *testing.T) {
 	// (b) SetMode disarm restores the default hint too.
 	pressCtrlW(a)
 	a.SetMode(ModeConfirm)
-	if strings.Contains(statusHint(a), "ctrl+w …") {
+	if strings.Contains(statusHint(a), "ctrl+alt+w …") {
 		t.Fatalf("after SetMode disarm: prefix hint must clear, got %q", statusHint(a))
 	}
 	if !strings.Contains(statusHint(a), "? for keybindings") {

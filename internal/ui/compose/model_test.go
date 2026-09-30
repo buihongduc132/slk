@@ -1220,7 +1220,7 @@ func TestComposeViewBroadcastHint(t *testing.T) {
 	if !strings.Contains(on, "also send to #general") {
 		t.Errorf("hint with channel name missing while broadcast is on, got:\n%s", on)
 	}
-	if !strings.Contains(on, "ctrl+o") {
+	if !strings.Contains(on, "ctrl+alt+o") {
 		t.Errorf("hint should name the toggle key, got:\n%s", on)
 	}
 	if strings.Contains(on, "draft text") == false {

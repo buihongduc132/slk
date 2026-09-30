@@ -16,7 +16,7 @@ import (
 	"github.com/gammons/slk/internal/ui/wintree"
 )
 
-// handleWindowChord consumes the key following ctrl+w (vim window
+// handleWindowChord consumes the key following ctrl+alt+w (vim window
 // commands, design §4). Unmapped keys — including Esc — cancel
 // silently, matching vim.
 func (a *App) handleWindowChord(msg tea.KeyMsg) tea.Cmd {
@@ -33,7 +33,7 @@ func (a *App) handleWindowChord(msg tea.KeyMsg) tea.Cmd {
 		return a.navigateWindow(wintree.NavUp)
 	case "l", "right":
 		return a.navigateWindow(wintree.NavRight)
-	case "w", "ctrl+w":
+	case "w", "ctrl+alt+w":
 		return a.cycleWindow()
 	case "q", "c":
 		return a.closeWindow()

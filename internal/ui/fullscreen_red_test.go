@@ -333,7 +333,7 @@ func TestFullscreen_ChordEscCancelUnchangedWhenNotZoomed(t *testing.T) {
 	updateAndRender(t, a, keyPress('i'))
 	updateAndRender(t, a, keyCode(tea.KeyEscape)) // back to normal, not zoomed
 
-	updateAndRender(t, a, keyMod('w', tea.ModCtrl))
+	updateAndRender(t, a, keyMod('w', tea.ModCtrl|tea.ModAlt))
 	if !a.pendingWinCmd {
 		t.Fatal("precondition: ctrl+w did not arm the window chord")
 	}
@@ -569,7 +569,7 @@ func TestFullscreen_SuppressedKeysToastWhileZoomed(t *testing.T) {
 	}{
 		{
 			name: "ctrl+b does not toggle the sidebar",
-			key:  keyMod('b', tea.ModCtrl),
+			key:  keyMod('b', tea.ModCtrl|tea.ModAlt),
 			state: func(t *testing.T, a *App, _ tea.Cmd) {
 				if !a.sidebarVisible {
 					t.Error("ctrl+b toggled the sidebar while zoomed; it must be suppressed")
@@ -578,7 +578,7 @@ func TestFullscreen_SuppressedKeysToastWhileZoomed(t *testing.T) {
 		},
 		{
 			name: "ctrl+w chord never arms",
-			key:  keyMod('w', tea.ModCtrl),
+			key:  keyMod('w', tea.ModCtrl|tea.ModAlt),
 			state: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.pendingWinCmd {
 					t.Error("ctrl+w armed the window chord while zoomed; suppression must happen at the prefix arm (fs-supp-set)")
@@ -587,7 +587,7 @@ func TestFullscreen_SuppressedKeysToastWhileZoomed(t *testing.T) {
 		},
 		{
 			name: "ctrl+a does not open Activity",
-			key:  keyMod('a', tea.ModCtrl),
+			key:  keyMod('a', tea.ModCtrl|tea.ModAlt),
 			state: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.view == ViewActivity {
 					t.Error("ctrl+a opened the Activity view while zoomed; it must be suppressed")
@@ -596,7 +596,7 @@ func TestFullscreen_SuppressedKeysToastWhileZoomed(t *testing.T) {
 		},
 		{
 			name: "ctrl+t does not open the finder",
-			key:  keyMod('t', tea.ModCtrl),
+			key:  keyMod('t', tea.ModCtrl|tea.ModAlt),
 			state: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.channelFinder.IsVisible() {
 					t.Error("ctrl+t opened the channel finder while zoomed; it must be suppressed")

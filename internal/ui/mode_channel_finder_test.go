@@ -505,7 +505,7 @@ func TestChannelFinderModeKeys(t *testing.T) {
 			name:     "an unbound ctrl chord neither types nor navigates",
 			opts:     channelFinderOpts(),
 			setup:    assertFinderOpen,
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeChannelFinder,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := a.channelFinder.Query(); got != "" {

@@ -520,7 +520,7 @@ func TestWorkspaceSearchModeKeys(t *testing.T) {
 			name:     "an unbound ctrl chord neither types nor navigates",
 			opts:     wsSearchOpts(),
 			setup:    typeWorkspaceQuery("hello"),
-			key:      keyMod('x', tea.ModCtrl),
+			key:      keyMod('x', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeWorkspaceSearch,
 			assert: func(t *testing.T, a *App, cmd tea.Cmd) {
 				if got := a.searchResults.Query(); got != "hello" {

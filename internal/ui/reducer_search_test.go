@@ -296,7 +296,7 @@ func TestSearchNextGatedOffThreadPanel(t *testing.T) {
 
 func TestCtrlFOpensWorkspaceSearch(t *testing.T) {
 	app := searchTestApp(t)
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	if app.mode != ModeWorkspaceSearch || !app.searchResults.IsVisible() {
 		t.Fatalf("mode=%v visible=%v", app.mode, app.searchResults.IsVisible())
 	}
@@ -313,7 +313,7 @@ func TestWorkspaceSearchSubmitAndResults(t *testing.T) {
 			}, Total: 1}
 		},
 	}))
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	for _, m := range drainCmd(cmd) {
@@ -336,7 +336,7 @@ func TestWorkspaceSearchSelectNavigates(t *testing.T) {
 		}
 		return "", "", false
 	})
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	app.searchResults.HandleKey("q")
 	app.searchResults.HandleKey("enter")
 	app.searchResults.SetResults([]searchresults.Item{
@@ -369,7 +369,7 @@ func TestWorkspaceSearchSelectNonMemberToastsInsteadOfNavigating(t *testing.T) {
 	app := searchTestApp(t)
 	// No Lookup wired -> every Lookup misses: the hit is in a public
 	// channel the user hasn't joined (unknown to the sidebar/finder).
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	app.searchResults.HandleKey("q")
 	app.searchResults.HandleKey("enter")
 	app.searchResults.SetResults([]searchresults.Item{
@@ -446,7 +446,7 @@ func TestWorkspaceSearchResultsInstallHighlightTerms(t *testing.T) {
 	}
 
 	app := searchTestApp(t)
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	query := "deploy in:#general"
 	for _, r := range query {
 		app.searchResults.HandleKey(string(r))
@@ -468,7 +468,7 @@ func TestWorkspaceSearchResultsInstallHighlightTerms(t *testing.T) {
 
 func TestWorkspaceSearchErrorShownInModal(t *testing.T) {
 	app := searchTestApp(t)
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	app.searchResults.HandleKey("q")
 	app.searchResults.HandleKey("enter")
 	app.Update(WorkspaceSearchResultsMsg{Query: "q", Err: errors.New("rate limited")})
@@ -486,7 +486,7 @@ func TestWorkspaceSearchEscWhilePendingDropsLateResult(t *testing.T) {
 			}, Total: 1}
 		},
 	}))
-	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl | tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	// Esc closes the modal while the search is in flight.

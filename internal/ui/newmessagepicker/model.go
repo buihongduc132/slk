@@ -178,12 +178,12 @@ func (m *Model) HandleKey(keyStr string) *Result {
 	case "esc":
 		m.Close()
 		return nil
-	case "down", "ctrl+n":
+	case "down", "ctrl+n", "ctrl+alt+n":
 		if m.highlight < len(m.filtered)-1 {
 			m.highlight++
 		}
 		return nil
-	case "up", "ctrl+p":
+	case "up", "ctrl+p", "ctrl+alt+p":
 		if m.highlight > 0 {
 			m.highlight--
 		}

@@ -128,23 +128,23 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	// implementing the Kitty Keyboard Protocol, regardless of whether
 	// they're relevant to the binding — strip them before comparing.
 	mod := msg.Key().Mod &^ (tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock)
-	isPaste := code == 'v' && mod == tea.ModCtrl
+	isPaste := code == 'v' && mod == tea.ModCtrl|tea.ModAlt
 	if isPaste {
 		return a.smartPaste()
 	}
-	if code == 'e' && mod == tea.ModCtrl {
+	if code == 'e' && mod == tea.ModCtrl|tea.ModAlt {
 		return a.openComposeInEditor()
 	}
 
 	// Insert-mode shortcuts that operate on the active compose:
-	//   Ctrl+U  -> clear compose (text + attachments + uploading flag)
+	//   Ctrl+Alt+U -> clear compose (text + attachments + uploading flag)
 	//   Up      -> if cursor on first line, jump to start of textarea
 	//   Down    -> if cursor on last line,  jump to end of textarea
 	target := &a.compose
 	if a.focusedPanel == PanelThread && a.threadVisible {
 		target = &a.threadCompose
 	}
-	if code == 'u' && mod == tea.ModCtrl {
+	if code == 'u' && mod == tea.ModCtrl|tea.ModAlt {
 		target.Reset()
 		return nil
 	}
@@ -158,7 +158,7 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	// thread reply. Thread compose only -- the channel compose has no
 	// broadcast concept. Skipped while a picker is active so picker
 	// navigation keys keep precedence.
-	if target == &a.threadCompose && !pickerActive && code == 'o' && mod == tea.ModCtrl {
+	if target == &a.threadCompose && !pickerActive && code == 'o' && mod == tea.ModCtrl|tea.ModAlt {
 		a.threadCompose.ToggleBroadcast()
 		return nil
 	}
@@ -179,7 +179,7 @@ func handleInsertMode(a *App, msg tea.KeyMsg) tea.Cmd {
 	isAltEnter := code == tea.KeyEnter && mod.Contains(tea.ModAlt)
 	isSend := code == tea.KeyEnter && !mod.Contains(tea.ModShift)
 	isNewline := (code == tea.KeyEnter && mod.Contains(tea.ModShift)) ||
-		(code == 'j' && mod == tea.ModCtrl)
+		(code == 'j' && mod == tea.ModCtrl|tea.ModAlt)
 
 	// Determine which compose box is active based on focused panel.
 	if a.focusedPanel == PanelThread && a.threadVisible {

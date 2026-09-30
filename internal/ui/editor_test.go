@@ -138,7 +138,7 @@ func TestApp_CtrlEOpensEditorFromInsertMode(t *testing.T) {
 	_ = a.compose.Focus()
 	a.compose.SetValue("draft before editor")
 
-	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd == nil {
 		t.Fatal("want a non-nil Cmd from Ctrl+E in insert mode")
 	}
@@ -226,7 +226,7 @@ func TestApp_CtrlEWithNoEditorConfiguredShowsToast(t *testing.T) {
 	_ = a.compose.Focus()
 	a.compose.SetValue("draft before editor")
 
-	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd == nil {
 		t.Fatal("want a non-nil Cmd (the toast) even with no editor configured")
 	}
@@ -247,7 +247,7 @@ func TestApp_UpdateRoutesCtrlEThroughFullDispatch(t *testing.T) {
 	a.composeEditor = []string{"true"}
 	_ = a.compose.Focus()
 
-	_, cmd := a.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	_, cmd := a.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModAlt})
 	if cmd == nil {
 		t.Fatal("want a non-nil Cmd from a.Update for Ctrl+E in insert mode")
 	}
@@ -268,7 +268,7 @@ func TestApp_CtrlEWorksWithNumLockModifierBit(t *testing.T) {
 	a.composeEditor = []string{"true"}
 	_ = a.compose.Focus()
 
-	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModNumLock})
+	cmd := a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModAlt | tea.ModNumLock})
 	if cmd == nil {
 		t.Fatal("want Ctrl+E to still register with NumLock's Mod bit set")
 	}

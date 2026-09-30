@@ -389,7 +389,7 @@ func pasteInto(t *testing.T, a *App) {
 	a.focusedPanel = PanelMessages
 	a.SetMode(ModeInsert)
 	_ = a.compose.Focus()
-	_ = a.handleInsertMode(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	_ = a.handleInsertMode(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl | tea.ModAlt})
 }
 
 func TestSeam_PasteText(t *testing.T) {
@@ -792,7 +792,7 @@ func editDraft(a *App, draft string) tea.Cmd {
 	a.SetMode(ModeInsert)
 	_ = a.compose.Focus()
 	a.compose.SetValue(draft)
-	return a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	return a.handleKey(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl | tea.ModAlt})
 }
 
 func TestSeam_EditorGetsDraftInTempFile(t *testing.T) {

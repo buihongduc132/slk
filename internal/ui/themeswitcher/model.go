@@ -161,13 +161,13 @@ func (m *Model) HandleKey(keyStr string) *ThemeResult {
 		m.Close()
 		return nil
 
-	case "down", "ctrl+n", "j":
+	case "down", "ctrl+n", "j", "ctrl+alt+n":
 		if m.selected < len(m.filtered)-1 {
 			m.selected++
 		}
 		return nil
 
-	case "up", "ctrl+p", "k":
+	case "up", "ctrl+p", "k", "ctrl+alt+p":
 		if m.selected > 0 {
 			m.selected--
 		}

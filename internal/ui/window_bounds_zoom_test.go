@@ -134,7 +134,7 @@ func TestWindowBounds_ZoomedThreadPromotedUnreachable(t *testing.T) {
 			name string
 			key  tea.KeyMsg
 		}{
-			{"ctrl+w (chord prefix -> splitWindow / navigateWindow)", keyMod('w', tea.ModCtrl)},
+			{"ctrl+alt+w (chord prefix -> splitWindow / navigateWindow)", keyMod('w', tea.ModCtrl|tea.ModAlt)},
 			{": (command mode -> :sp / :vsp)", keyPress(':')},
 		} {
 			if !a.zoomSuppresses(tc.key) {

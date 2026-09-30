@@ -18,7 +18,7 @@ func TestHandleInsertMode_CtrlUIgnoresNumLock(t *testing.T) {
 	_ = a.compose.Focus()
 	a.compose.SetValue("some draft text")
 
-	_ = a.handleKey(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl | tea.ModNumLock})
+	_ = a.handleKey(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl | tea.ModAlt | tea.ModNumLock})
 
 	if a.compose.Value() != "" {
 		t.Fatalf("want compose fully cleared, got %q", a.compose.Value())
@@ -37,7 +37,7 @@ func TestHandleInsertMode_PasteIgnoresCapsLock(t *testing.T) {
 	a.setClipboardReaderForTest(fakeClipboard(nil, []byte("pasted via ctrl+v")))
 	_ = a.compose.Focus()
 
-	_ = a.handleKey(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl | tea.ModCapsLock})
+	_ = a.handleKey(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl | tea.ModAlt | tea.ModCapsLock})
 
 	if !strings.Contains(a.compose.Value(), "pasted via ctrl+v") {
 		t.Fatalf("want clipboard text pasted, got compose value %q", a.compose.Value())

@@ -402,7 +402,7 @@ func TestSearchModeKeys(t *testing.T) {
 			name:     "a ctrl-modified key is dropped by the single-rune filter",
 			opts:     searchOpts(),
 			setup:    typeSearch("help"),
-			key:      keyMod('v', tea.ModCtrl),
+			key:      keyMod('v', tea.ModCtrl|tea.ModAlt),
 			wantMode: ModeSearch,
 			assert: func(t *testing.T, a *App, _ tea.Cmd) {
 				if a.searchInput != "help" {

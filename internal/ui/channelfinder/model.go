@@ -336,13 +336,13 @@ func (m *Model) HandleKey(keyStr string) *ChannelResult {
 		m.Close()
 		return nil
 
-	case "down", "ctrl+n":
+	case "down", "ctrl+n", "ctrl+alt+n":
 		if m.selected < len(m.filtered)-1 {
 			m.selected++
 		}
 		return nil
 
-	case "up", "ctrl+p":
+	case "up", "ctrl+p", "ctrl+alt+p":
 		if m.selected > 0 {
 			m.selected--
 		}
