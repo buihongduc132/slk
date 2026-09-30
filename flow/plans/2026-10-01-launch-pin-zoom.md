@@ -5,7 +5,7 @@
 > Deployment: dev:todo
 > Branch: `launchpin-zoom`
 > Worktree: /home/bhd/Documents/Projects/bhd/slk-wt/launchpin-zoom (created via branchlet from `main` @ 7daa989; verified `git worktree list`)
-> Location: flow/plans/2026-10-01-launch-pin-zoom.md
+> Location: flow/plans/2026-10-01-launch-pin-zoom.md (committed 1aeaccc)
 > Items: 31 total (0 implemented, 31 pending) — 15 original + 16 gotcha-appended; see Gotcha Coverage + Cost Audit appendix
 
 ## References
