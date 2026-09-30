@@ -27,7 +27,6 @@ var mainGoAllowed = map[string]string{
 	"commit":             "build stamp, set via -ldflags",
 	"date":               "build stamp, set via -ldflags",
 	"main":               "process entrypoint",
-	"printHelp":          "usage text for main",
 	"newImageHTTPClient": "constructed by run; single caller",
 	"run":                "composition root — Phase 2 decomposes this",
 }

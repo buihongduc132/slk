@@ -81,11 +81,11 @@ func defaultSwitchHandlers() *switchHandlers {
 	}
 }
 
-// readLaunchEnv reads the three SLK_* environment variables.
-// This is the single read site in the codebase for these variables (R8).
-func readLaunchEnv() (channel, thread, fullscreen string) {
-	return os.Getenv("SLK_CHANNEL"), os.Getenv("SLK_THREAD"), os.Getenv("SLK_FULLSCREEN")
-}
+// The SLK_* environment variables are read via the getenv closure that
+// parseLaunchArgs takes (os.Getenv in production, injected in tests). That
+// closure is the single read site for these variables (R8) — see
+// TestLaunchEnvReadForm, which pins launch_pin.go as the only non-test
+// file containing the os.Getenv("SLK_...") spelling.
 
 // parseEnvFullscreen parses the SLK_FULLSCREEN environment variable.
 // Accepted truthy set: "1", "true", "yes", "on" (case-folded).
@@ -356,10 +356,7 @@ func resolveLaunchTarget(
 
 			// Check cross-source conflict: if rawChannel was also provided and differs (lp-cross-source-conflict)
 			if rawChannel != "" {
-				explicitChan := rawChannel
-				if strings.HasPrefix(explicitChan, "#") {
-					explicitChan = explicitChan[1:]
-				}
+				explicitChan := strings.TrimPrefix(rawChannel, "#")
 				if plChan, ok := slackurl.Parse(rawChannel); ok {
 					explicitChan = string(plChan.ChannelID)
 				}
@@ -391,10 +388,7 @@ func resolveLaunchTarget(
 				}
 			}
 		} else {
-			stripped := rawChannel
-			if strings.HasPrefix(stripped, "#") {
-				stripped = stripped[1:]
-			}
+			stripped := strings.TrimPrefix(rawChannel, "#")
 			if rawChannelIDRegex.MatchString(stripped) {
 				target.ChannelID = stripped
 			} else {

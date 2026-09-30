@@ -122,10 +122,6 @@ func main() {
 	}
 }
 
-func printHelp() {
-	printHelpTo(os.Stdout)
-}
-
 // newImageHTTPClient builds the HTTP client the avatar/thumbnail
 // fetcher uses.
 //

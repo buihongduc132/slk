@@ -253,21 +253,3 @@ func TestWorkspaceReadyNoticeCompose(t *testing.T) {
 		t.Errorf("statusbar text = %q, want notice text %q", sbText, noticeText)
 	}
 }
-
-// runBatchCmds executes all sub-commands of a batch command against the app.
-func runBatchCmds(a *App, cmd tea.Cmd) {
-	if cmd == nil {
-		return
-	}
-	msg := cmd()
-	if msg == nil {
-		return
-	}
-	if batch, ok := msg.(tea.BatchMsg); ok {
-		for _, c := range batch {
-			runBatchCmds(a, c)
-		}
-		return
-	}
-	_, _ = a.Update(msg)
-}
