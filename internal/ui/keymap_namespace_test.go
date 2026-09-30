@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -131,76 +133,37 @@ func TestKeyMap_HelpMatchesKeys(t *testing.T) {
 	}
 }
 
-// keyMapBindings reflects over KeyMap, returning field name → binding.
-// Reflection keeps this guard total: a NEW KeyMap field is checked the
-// moment it is added, with zero test edits.
+// keyMapBindings reflects over the KeyMap struct, returning
+// field name → binding. REAL reflection (reflect.Value.FieldByName over
+// the struct type): a NEW KeyMap field is covered the moment it is
+// added — this guard cannot go stale by omission. A non-key.Binding
+// field would fail the type assertion and break the test, which is the
+// correct failure (KeyMap is a flat binding struct by design).
 func keyMapBindings(km KeyMap) map[string]key.Binding {
 	out := map[string]key.Binding{}
-	add := func(name string, b key.Binding) { out[name] = b }
-	add("Up", km.Up)
-	add("Down", km.Down)
-	add("Left", km.Left)
-	add("Right", km.Right)
-	add("Enter", km.Enter)
-	add("Escape", km.Escape)
-	add("InsertMode", km.InsertMode)
-	add("CommandMode", km.CommandMode)
-	add("SearchMode", km.SearchMode)
-	add("SearchNext", km.SearchNext)
-	add("SearchPrev", km.SearchPrev)
-	add("WorkspaceSearch", km.WorkspaceSearch)
-	add("Tab", km.Tab)
-	add("ShiftTab", km.ShiftTab)
-	add("ToggleSidebar", km.ToggleSidebar)
-	add("SidebarGrow", km.SidebarGrow)
-	add("SidebarShrink", km.SidebarShrink)
-	add("ToggleThread", km.ToggleThread)
-	add("FuzzyFinder", km.FuzzyFinder)
-	add("FuzzyFinderAlt", km.FuzzyFinderAlt)
-	add("Top", km.Top)
-	add("Bottom", km.Bottom)
-	add("PageUp", km.PageUp)
-	add("PageDown", km.PageDown)
-	add("HalfPageUp", km.HalfPageUp)
-	add("HalfPageDown", km.HalfPageDown)
-	add("Quit", km.Quit)
-	add("QuitConfirm", km.QuitConfirm)
-	add("CloseThreadView", km.CloseThreadView)
-	add("Reaction", km.Reaction)
-	add("ReactionNav", km.ReactionNav)
-	add("Edit", km.Edit)
-	add("Delete", km.Delete)
-	add("CopyMessage", km.CopyMessage)
-	add("CopyPermalink", km.CopyPermalink)
-	add("ForwardMessage", km.ForwardMessage)
-	add("OpenPreview", km.OpenPreview)
-	add("OpenLink", km.OpenLink)
-	add("DownloadFile", km.DownloadFile)
-	add("MarkUnread", km.MarkUnread)
-	add("NextUnread", km.NextUnread)
-	add("PrevUnread", km.PrevUnread)
-	add("ActivityView", km.ActivityView)
-	add("ActivityUnread", km.ActivityUnread)
-	add("WorkspaceFinder", km.WorkspaceFinder)
-	add("NewMessage", km.NewMessage)
-	add("ThemeSwitcher", km.ThemeSwitcher)
-	add("ThemeSwitcherGlobal", km.ThemeSwitcherGlobal)
-	add("PresenceMenu", km.PresenceMenu)
-	add("ToggleSection", km.ToggleSection)
-	add("NavBack", km.NavBack)
-	add("NavForward", km.NavForward)
-	add("Help", km.Help)
-	add("SaveThread", km.SaveThread)
-	add("ListReactions", km.ListReactions)
-	add("WindowPrefix", km.WindowPrefix)
-	add("WinSplit", km.WinSplit)
-	add("WinVSplit", km.WinVSplit)
-	add("WinNavigate", km.WinNavigate)
-	add("WinCycle", km.WinCycle)
-	add("WinClose", km.WinClose)
-	add("WinOnly", km.WinOnly)
-	add("ToggleBroadcast", km.ToggleBroadcast)
-	add("OpenInEditor", km.OpenInEditor)
-	add("Zoom", km.Zoom)
+	v := reflect.ValueOf(km)
+	typ := v.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		b, ok := v.Field(i).Interface().(key.Binding)
+		if !ok {
+			panic(fmt.Sprintf("KeyMap field %s is not a key.Binding — KeyMap must stay a flat binding struct", f.Name))
+		}
+		out[f.Name] = b
+	}
 	return out
+}
+
+// TestKeyMap_GuardCoversEveryField pins that the reflection-based
+// guard enumerates EVERY field of KeyMap — the mechanism the earlier
+// hand-maintained add() list faked. If someone renames the reflect
+// walk to a subset (or reintroduces a hand list), the count diverges
+// and this fails before any binding slips through uncovered.
+func TestKeyMap_GuardCoversEveryField(t *testing.T) {
+	km := DefaultKeyMap()
+	got := keyMapBindings(km)
+	typ := reflect.TypeOf(km)
+	if len(got) != typ.NumField() {
+		t.Fatalf("guard covers %d bindings, KeyMap has %d fields — coverage hole", len(got), typ.NumField())
+	}
 }

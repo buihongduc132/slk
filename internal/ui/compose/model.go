@@ -585,22 +585,26 @@ func (m *Model) autoGrow() {
 	}
 }
 
-// isCtrl reports whether mod represents Ctrl held, ignoring lock-state
-// bits (NumLock/CapsLock/ScrollLock) that ride along on terminals
+// isCtrlOrCtrlAlt reports whether mod represents Ctrl held, with or
+// without Alt (the herdr-coexistence nav namespace: herdr owns bare
+// ctrl+p/ctrl+n globally, so pickers accept both the legacy bare-ctrl
+// forms and the ctrl+alt forms), ignoring lock-state bits
+// (NumLock/CapsLock/ScrollLock) that ride along on terminals
 // implementing the Kitty Keyboard Protocol.
-func isCtrl(mod tea.KeyMod) bool {
-	return mod&^(tea.ModCapsLock|tea.ModNumLock|tea.ModScrollLock) == tea.ModCtrl
+func isCtrlOrCtrlAlt(mod tea.KeyMod) bool {
+	clean := mod &^ (tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock)
+	return clean == tea.ModCtrl || clean == tea.ModCtrl|tea.ModAlt
 }
 
 // handleMentionKey processes key events when the mention picker is active.
 func (m Model) handleMentionKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	k := msg.Key()
 	switch {
-	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrlOrCtrlAlt(k.Mod)):
 		m.mentionPicker.MoveUp()
 		return m, nil
 
-	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrlOrCtrlAlt(k.Mod)):
 		m.mentionPicker.MoveDown()
 		return m, nil
 
@@ -689,11 +693,11 @@ func (m *Model) insertMention(result *mentionpicker.MentionResult) {
 func (m Model) handleChannelKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	k := msg.Key()
 	switch {
-	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrlOrCtrlAlt(k.Mod)):
 		m.channelPicker.MoveUp()
 		return m, nil
 
-	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrlOrCtrlAlt(k.Mod)):
 		m.channelPicker.MoveDown()
 		return m, nil
 
@@ -1181,11 +1185,11 @@ func (m *Model) maybeOpenEmojiPicker() {
 func (m Model) handleEmojiKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	k := msg.Key()
 	switch {
-	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyUp || (k.Code == 'p' && isCtrlOrCtrlAlt(k.Mod)):
 		m.emojiPicker.MoveUp()
 		return m, nil
 
-	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrl(k.Mod)):
+	case k.Code == tea.KeyDown || (k.Code == 'n' && isCtrlOrCtrlAlt(k.Mod)):
 		m.emojiPicker.MoveDown()
 		return m, nil
 

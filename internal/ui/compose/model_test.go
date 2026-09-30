@@ -296,7 +296,7 @@ func TestMentionNavigateUpDown(t *testing.T) {
 	}
 }
 
-func TestIsCtrl_IgnoresLockStateBits(t *testing.T) {
+func TestIsCtrlOrCtrlAlt_IgnoresLockStateBits(t *testing.T) {
 	cases := []struct {
 		name string
 		mod  tea.KeyMod
@@ -307,14 +307,17 @@ func TestIsCtrl_IgnoresLockStateBits(t *testing.T) {
 		{"ctrl + capslock", tea.ModCtrl | tea.ModCapsLock, true},
 		{"ctrl + scrolllock", tea.ModCtrl | tea.ModScrollLock, true},
 		{"ctrl + all lock bits", tea.ModCtrl | tea.ModNumLock | tea.ModCapsLock | tea.ModScrollLock, true},
+		{"ctrl + alt (herdr-safe)", tea.ModCtrl | tea.ModAlt, true},
+		{"ctrl + alt + numlock", tea.ModCtrl | tea.ModAlt | tea.ModNumLock, true},
 		{"no ctrl", 0, false},
 		{"numlock alone", tea.ModNumLock, false},
 		{"ctrl + shift", tea.ModCtrl | tea.ModShift, false},
+		{"alt alone", tea.ModAlt, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := isCtrl(c.mod); got != c.want {
-				t.Errorf("isCtrl(%v) = %v, want %v", c.mod, got, c.want)
+			if got := isCtrlOrCtrlAlt(c.mod); got != c.want {
+				t.Errorf("isCtrlOrCtrlAlt(%v) = %v, want %v", c.mod, got, c.want)
 			}
 		})
 	}

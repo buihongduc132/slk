@@ -1,6 +1,6 @@
 // internal/ui/mode_workspace_search.go
 //
-// Workspace-search mode key handler: the ctrl+f modal.
+// Workspace-search mode key handler: the ctrl+alt+f modal.
 //
 // Forwards normalized keys to the searchresults overlay and
 // translates its actions: Submit dispatches the server-side
@@ -54,7 +54,7 @@ func handleWorkspaceSearchMode(a *App, msg tea.KeyMsg) tea.Cmd {
 		if !ok {
 			chName := item.ChannelName
 			return func() tea.Msg {
-				return ToastMsg{Text: "Not a member of #" + chName + " — join via ctrl+t to view"}
+				return ToastMsg{Text: "Not a member of #" + chName + " — join via ctrl+alt+t to view"}
 			}
 		}
 		a.pendingLinkNav = &pendingLinkNav{

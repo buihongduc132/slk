@@ -12,7 +12,7 @@ import (
 )
 
 // ---------------------------------------------------------------------
-// handleWorkspaceSearchMode (mode_workspace_search.go:20) -- the ctrl+f
+// handleWorkspaceSearchMode (mode_workspace_search.go:20) -- the ctrl+alt+f
 // modal.
 //
 // The handler is a four-way switch on searchresults.Action. Only
@@ -387,7 +387,7 @@ func TestWorkspaceSearchModeKeys(t *testing.T) {
 				if !ok {
 					t.Fatalf("cmd() = %T, want ToastMsg", cmd())
 				}
-				want := "Not a member of #secrets — join via ctrl+t to view"
+				want := "Not a member of #secrets — join via ctrl+alt+t to view"
 				if toast.Text != want {
 					t.Errorf("toast = %q, want %q", toast.Text, want)
 				}
