@@ -81,11 +81,21 @@ func defaultSwitchHandlers() *switchHandlers {
 	}
 }
 
-// The SLK_* environment variables are read via the getenv closure that
-// parseLaunchArgs takes (os.Getenv in production, injected in tests). That
-// closure is the single read site for these variables (R8) — see
-// TestLaunchEnvReadForm, which pins launch_pin.go as the only non-test
-// file containing the os.Getenv("SLK_...") spelling.
+// readLaunchEnv is the production getenv for the SLK_* launch variables
+// and the single os.Getenv("SLK_...") read site in the module (R8: no
+// second spelling, no direct os.Getenv at call sites). parseLaunchArgs
+// defaults to it; tests inject a fake.
+func readLaunchEnv(name string) string {
+	switch name {
+	case envSlkChannel:
+		return os.Getenv("SLK_CHANNEL")
+	case envSlkThread:
+		return os.Getenv("SLK_THREAD")
+	case envSlkFullscreen:
+		return os.Getenv("SLK_FULLSCREEN")
+	}
+	return ""
+}
 
 // parseEnvFullscreen parses the SLK_FULLSCREEN environment variable.
 // Accepted truthy set: "1", "true", "yes", "on" (case-folded).
@@ -115,7 +125,7 @@ func parseLaunchArgs(
 	handlers *switchHandlers,
 ) (EarlyArgAction, int, *LaunchTarget, error) {
 	if getenv == nil {
-		getenv = os.Getenv
+		getenv = readLaunchEnv
 	}
 	if handlers == nil {
 		handlers = defaultSwitchHandlers()
