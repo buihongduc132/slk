@@ -170,6 +170,14 @@ type App struct {
 	// normalizeZoomFocus.
 	zoomSavedThreadFocus bool
 
+	// Launch-pin zoom state
+	launchPinFullscreen bool
+	launchPinThreadZoom bool
+	// launchPinThreadTS is the armed thread pin's ts: the matching key for
+	// replies that arrive through paths that don't carry the
+	// pendingLinkNav envelope (and the runtime not-found guard).
+	launchPinThreadTS string
+
 	// cmdline accumulates the text typed at the vi-style ':' prompt
 	// while in ModeCommand. Owned by mode_command.go; always "" in
 	// every other mode.
@@ -1006,7 +1014,40 @@ func (a *App) threadDrawnAloneAt(threadFront, zoomed bool) bool {
 // threadDrawnAlone passes the resolved front precisely because it is
 // asking the opposite question — what is on screen now.
 func (a *App) zoomFrontIsThread() bool {
+	if a.launchPinThreadZoom && a.threadVisible {
+		return true
+	}
 	return a.threadDrawnAloneAt(a.threadInFront(), false)
+}
+
+// enterLaunchPinZoom applies the pending launch-pin zoom once the pinned
+// target's CONTENT has landed (land-ordering): channel-only pins zoom when
+// MessagesLoadedMsg replaces the pane; thread pins zoom here, after the
+// thread panel is open AND its replies landed, so the first zoomed frame
+// never shows an empty thread pane (appendix: "enterZoom only after
+// content"). The thread flag routes zoomFrontIsThread to promote the THREAD
+// pane at any width (lp-zoom-threadpane); B48's focus-based behavior stays
+// intact for user-pressed `z` because launchPinThreadZoom is cleared on the
+// first exit/clear (and by user navigation, which drops the pin first).
+func (a *App) enterLaunchPinZoom(thread bool) {
+	if !a.launchPinFullscreen {
+		return
+	}
+	if thread {
+		a.launchPinThreadZoom = true
+	}
+	a.enterZoom()
+	a.launchPinFullscreen = false
+	a.launchPinThreadTS = ""
+}
+
+// dropLaunchPin cancels a still-pending launch pin when the user navigates
+// somewhere else before it lands (land-thread's stale-guard). A zoom the
+// user did not ask to have applied to the wrong pane is worse than no zoom.
+func (a *App) dropLaunchPin() {
+	a.launchPinFullscreen = false
+	a.launchPinThreadZoom = false
+	a.launchPinThreadTS = ""
 }
 
 // layoutThreadFront is the threadFront argument every Compute call

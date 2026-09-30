@@ -406,6 +406,17 @@ type (
 		// sidebar's first entry, so a restart lands the user back where
 		// they were. Empty (e.g. first ever run) falls back to Channels[0].
 		LastChannelID string
+		// PinChannelID opens the specified channel on the InitialActive workspace
+		// instead of LastChannelID or Channels[0].
+		PinChannelID string
+		// PinThreadTS arms a launch-pinned thread navigation on startup.
+		PinThreadTS string
+		// PinMessageTS arms a launch-pinned select-message navigation on startup.
+		PinMessageTS string
+		// PinFullscreen indicates whether the launched pane should be zoomed.
+		PinFullscreen bool
+		// LaunchNotice carries any launch-time notices (e.g. fallback notice or provenance).
+		LaunchNotice string
 	}
 	// CustomEmojisLoadedMsg is sent when a workspace's custom emoji list
 	// finishes loading in the background, after WorkspaceReadyMsg has

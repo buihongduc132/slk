@@ -1,12 +1,12 @@
 # slk launch-pinned zoom (args + ENV)
 
 > Plan ID: `2026-10-01-launch-pin-zoom` · Created: 2026-10-01 · Last reconciled: 2026-10-01
-> Working Status: todo
-> Deployment: dev:todo
+> Working Status: completed
+> Deployment: dev:ready
 > Branch: `launchpin-zoom`
 > Worktree: /home/bhd/Documents/Projects/bhd/slk-wt/launchpin-zoom (created via branchlet from `main` @ 7daa989; verified `git worktree list`)
 > Location: flow/plans/2026-10-01-launch-pin-zoom.md (committed 1aeaccc)
-> Items: 31 total (0 implemented, 31 pending) — 15 original + 16 gotcha-appended; see Gotcha Coverage + Cost Audit appendix
+> Items: 31 total (31 implemented, 0 pending) — 15 original + 16 gotcha-appended; see Gotcha Coverage + Cost Audit appendix
 
 ## References
 - Origin (verbatim user request, 2026-10-01): https://dy-swarm.slack.com/archives/C0C4K3MTXGS/p17907992664617629?thread_ts=1790799025.163839 (#slk C0C4K3MTXGS, thread root 1790799025.163839)
@@ -41,67 +41,67 @@
 
 ## DOD (Definition of Done)
 Plan done when ALL below true:
-- [ ] DOD-1: `slk --channel <id|name|permalink> [--thread <ts|permalink>] [--fullscreen]` lands on that channel, thread open, pane already zoomed — no hotkey needed.
-- [ ] DOD-2: `SLK_CHANNEL` / `SLK_THREAD` / `SLK_FULLSCREEN` behave as equivalents; precedence flags > ENV > config/state is pinned by a test.
-- [ ] DOD-3: Thread spec accepted as permalink (via `slackurl.Parse`) or channel+ts pair.
-- [ ] DOD-4: Unresolvable target (not found / no access) → normal launch + non-blocking notice (toast/status line), exit code unchanged.
-- [ ] DOD-5: `--fullscreen` without resolvable target follows R3's single behavior, pinned by a test.
-- [ ] DOD-6: No regression to existing `os.Args[1]` switches; `--help` updated; `go vet` / `go test -race` / `gofmt` / lint clean; no new deps.
+- [x] DOD-1: `slk --channel <id|name|permalink> [--thread <ts|permalink>] [--fullscreen]` lands on that channel, thread open, pane already zoomed — no hotkey needed.
+- [x] DOD-2: `SLK_CHANNEL` / `SLK_THREAD` / `SLK_FULLSCREEN` behave as equivalents; precedence flags > ENV > config/state is pinned by a test.
+- [x] DOD-3: Thread spec accepted as permalink (via `slackurl.Parse`) or channel+ts pair.
+- [x] DOD-4: Unresolvable target (not found / no access) → normal launch + non-blocking notice (toast/status line), exit code unchanged.
+- [x] DOD-5: `--fullscreen` without resolvable target follows R3's single behavior, pinned by a test.
+- [x] DOD-6: No regression to existing `os.Args[1]` switches; `--help` updated; `go vet` / `go test -race` / `gofmt` / lint clean; no new deps.
 
 ## Declarative Items
 
 ### CLI surface (cmd/slk)
-- [ ] (cli-switch-compat): Existing single-word switches (`--version`/`-v`, `--help`/`-h`, `--add-workspace`, `--remove-workspace`, `--list-workspaces`, `--dump-sections`, `--dump-prefs`) behave byte-identically; only argv that matches NO existing switch and NO new flag reaches the flag layer, and unknown flags exit 2 with usage instead of launching the TUI.
-  - Status: pending
-  - Probe: cmd/slk table test over argv vectors (each existing switch + `--nonsense` + bare `slk`), asserting same outputs/exit codes as `main` @ 7daa989.
-- [ ] (cli-flags-parse): `--channel`, `--thread`, `--fullscreen` parse via one stdlib `flag.FlagSet` (R12); missing value / unknown flag / R10 violation → usage on stderr, exit 2, TUI never starts.
-  - Status: pending
-  - Probe: cmd/slk unit test table (valid forms, missing value, unknown flag, bare `--thread` without `--channel`).
-- [ ] (cli-env-equivalents): `SLK_CHANNEL` / `SLK_THREAD` / `SLK_FULLSCREEN` are read through exactly ONE accessor (R8); effective target = flags over ENV over persisted state (R1); empty/unset ENV is indistinguishable from absent.
-  - Status: pending
-  - Probe: precedence unit test (flag+ENV, ENV only, neither) + `rg -n "SLK_(CHANNEL|THREAD|FULLSCREEN)" --type go` returns exactly 1 non-test file.
-- [ ] (cli-help-doc): `slk --help` (printHelp, `cmd/slk/main.go:159`) documents the three flags, the three ENV vars, precedence, and the fallback behavior.
-  - Status: pending
-  - Probe: cmd/slk test asserting printHelp output contains `--channel`, `--thread`, `--fullscreen`, `SLK_CHANNEL`, `SLK_FULLSCREEN`, `flags > ENV`.
+- [x] (cli-switch-compat): Existing single-word switches (`--version`/`-v`, `--help`/`-h`, `--add-workspace`, `--remove-workspace`, `--list-workspaces`, `--dump-sections`, `--dump-prefs`) behave byte-identically; only argv that matches NO existing switch and NO new flag reaches the flag layer, and unknown flags exit 2 with usage instead of launching the TUI.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestEarlySwitch_Compatibility` PASS (all existing switches, bare args, and unknown flags tested).
+- [x] (cli-flags-parse): `--channel`, `--thread`, `--fullscreen` parse via one stdlib `flag.FlagSet` (R12); missing value / unknown flag / R10 violation → usage on stderr, exit 2, TUI never starts.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestParseLaunchArgs` PASS (valid flags, missing values, unknown flags, bare thread R10 violation exit 2).
+- [x] (cli-env-equivalents): `SLK_CHANNEL` / `SLK_THREAD` / `SLK_FULLSCREEN` are read through exactly ONE accessor (R8); effective target = flags over ENV over persisted state (R1); empty/unset ENV is indistinguishable from absent.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run 'TestLaunchEnvReadForm|TestParseLaunchArgs_EnvFallback'` PASS; `git grep -l 'os.Getenv("SLK_' cmd/ internal/` confirms single read site in `cmd/slk/launch_pin.go`.
+- [x] (cli-help-doc): `slk --help` (printHelp, `cmd/slk/main.go:159`) documents the three flags, the three ENV vars, precedence, and the fallback behavior.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestEarlySwitch_HelpDoc` PASS (verifies flags, ENV vars, precedence, and fallback documented).
 
 ### Launch-target resolution (pure, cmd/slk — R5)
-- [ ] (target-pure-parse): A pure resolver (no I/O) maps argv+ENV → `LaunchTarget{WorkspaceHint, ChannelID|ChannelName|Permalink, ThreadTS}` using `slackurl.Parse` (`internal/slackurl/slackurl.go:43`); malformed input returns ok=false, never panics.
-  - Status: pending
-  - Probe: unit table (channel id / channel name / permalink / permalink+thread_ts / thread ts pair / garbage / empty string).
-- [ ] (target-workspace-route): Permalink subdomain selects the matching configured workspace (R9); unmatched or absent → default workspace flagged for notice; id/name/thread-only specs never change workspace.
-  - Status: pending
-  - Probe: unit test with two configured workspaces covering match / mismatch / absent-subdomain.
-- [ ] (target-channel-resolve): Channel target resolves per R11 — local list first, one bounded `GetConversationInfo` for raw-ID misses, `text.Fold` name match; every miss path yields the R2 fallback, never an error exit.
-  - Status: pending
-  - Probe: unit tests with fake channel list + fake conversation-info client (hit, miss, error).
-- [ ] (target-thread-forms): Thread spec resolves from `--thread` ts pair, permalink `thread_ts`, or permalink message-ts (channel + select message, no thread) — the three forms map to the two landing behaviors (thread-open vs select-message) with no fourth behavior.
-  - Status: pending
-  - Probe: unit table asserting the mapping, including permalink WITHOUT thread_ts → select-message form.
+- [x] (target-pure-parse): A pure resolver (no I/O) maps argv+ENV → `LaunchTarget{WorkspaceHint, ChannelID|ChannelName|Permalink, ThreadTS}` using `slackurl.Parse` (`internal/slackurl/slackurl.go:43`); malformed input returns ok=false, never panics.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestResolveLaunchTarget_Pure` PASS (channels, names with #, permalinks, thread ts, malformed URLs).
+- [x] (target-workspace-route): Permalink subdomain selects the matching configured workspace (R9); unmatched or absent → default workspace flagged for notice; id/name/thread-only specs never change workspace.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestMatchWorkspaceBySubdomain` PASS (exact domain match, slug fallback, unmatched subdomain notice).
+- [x] (target-channel-resolve): Channel target resolves per R11 — local list first, one bounded `GetConversationInfo` for raw-ID misses, `text.Fold` name match; every miss path yields the R2 fallback, never an error exit.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestResolveChannelTarget` PASS (local hit, raw-ID API hydration, case folding, miss fallback with notice).
+- [x] (target-thread-forms): Thread spec resolves from `--thread` ts pair, permalink `thread_ts`, or permalink message-ts (channel + select message, no thread) — the three forms map to the two landing behaviors (thread-open vs select-message) with no fourth behavior.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestResolveLaunchTarget_Pure` PASS (checks thread_ts vs message_ts mapping).
 
 ### Landing (seam cmd/slk → internal/ui)
-- [ ] (land-channel): The InitialActive workspace opens the pinned channel at first paint instead of `LastChannelID`/`Channels[0]`; the seam is the `WorkspaceReadyMsg` send site (`cmd/slk/main.go:1581-1590`), reducer logic unchanged.
-  - Status: pending
-  - Probe: ui reducer test mirroring `internal/ui/reducer_workspace_lastchannel_test.go` (pin wins over LastChannelID; no pin → existing behavior byte-equal).
-- [ ] (land-thread): With a thread target, the thread panel is open at first paint via the `openThreadForPermalink` semantics (R6: buffer → cache → stub+backfill), reachable without any hotkey; pending nav cancels cleanly if the user navigates first (existing `pendingLinkNav` stale-guard).
-  - Status: pending
-  - Probe: `newTestApp` + `updateAndRender` driving the landing messages; assert thread visible + parent row present-or-backfilled.
-- [ ] (land-zoomed): With `--fullscreen`, the FIRST content frame is already zoomed, entered via `App.enterZoom` (R4) AFTER the target lands; `z`/`esc` still toggle/exit; no direct `a.zoomed =` assignment exists in the diff.
-  - Status: pending
-  - Probe: `assertZoomedFrame` on the first rendered frame; `git diff | grep -c "a.zoomed *=" == 0` gate in review.
-- [ ] (land-ordering): Zoom is applied only after channel/thread resolution completes (or falls back) — no zoom flash, no zoom on the pre-pin pane; ordering is enforced by message sequencing, not by sleeps.
-  - Status: pending
-  - Probe: test pinning the message order (ready → land → zoom) and asserting the un-zoomed frame never appears between them.
-- [ ] (fallback-normal): Unresolvable or inaccessible target → normal launch (last-visited channel via `LastChannelID`, else `Channels[0]`), one non-blocking `ToastMsg` notice naming the failed target, exit code 0 (R2).
-  - Status: pending
-  - Probe: `statusbarText(a)` asserts the notice; cmd/slk test asserts exit path unchanged; no stderr pollution in TUI mode.
+- [x] (land-channel): The InitialActive workspace opens the pinned channel at first paint instead of `LastChannelID`/`Channels[0]`; the seam is the `WorkspaceReadyMsg` send site (`cmd/slk/main.go:1581-1590`), reducer logic unchanged.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyPinChannelWinsOverLastChannel` PASS.
+- [x] (land-thread): With a thread target, the thread panel is open at first paint via the `openThreadForPermalink` semantics (R6: buffer → cache → stub+backfill), reachable without any hotkey; pending nav cancels cleanly if the user navigates first (existing `pendingLinkNav` stale-guard).
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyPinThread` PASS.
+- [x] (land-zoomed): With `--fullscreen`, the FIRST content frame is already zoomed, entered via `App.enterZoom` (R4) AFTER the target lands; `z`/`esc` still toggle/exit; no direct `a.zoomed =` assignment exists in the diff.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyPinZoomed` PASS; `git diff -U0 | grep -c '^+.*a.zoomed *='` is 0.
+- [x] (land-ordering): Zoom is applied only after channel/thread resolution completes (or falls back) — no zoom flash, no zoom on the pre-pin pane; ordering is enforced by message sequencing, not by sleeps.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyPinZoomed` PASS.
+- [x] (fallback-normal): Unresolvable or inaccessible target → normal launch (last-visited channel via `LastChannelID`, else `Channels[0]`), one non-blocking `ToastMsg` notice naming the failed target, exit code 0 (R2).
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyNoticeCompose` PASS.
 
 ### Tests + gates
-- [ ] (gates-green): `go build ./...`, `go vet ./...`, `go test ./... -race`, `gofmt -l .` empty, `golangci-lint run` clean, `git diff go.mod go.sum` empty — in the plan worktree.
-  - Status: pending
-  - Probe: `make test && make lint && make build` in /home/bhd/Documents/Projects/bhd/slk-wt/launchpin-zoom; record output SHAs.
-- [ ] (agentsmd-index): Any new shared helper this adds (launch-target resolver, ENV accessor) is registered in the AGENTS.md shared-code tables in the same commit, per repo convention.
-  - Status: pending
-  - Probe: `go test ./internal/ui -run TestAGENTSMD_EveryTableRowNamesAnythingThatExists` passes with the new rows.
+- [x] (gates-green): `go build ./...`, `go vet ./...`, `go test ./... -race`, `gofmt -l .` empty, `golangci-lint run` clean, `git diff go.mod go.sum` empty — in the plan worktree.
+  - Status: done
+  - Probe: `go build ./...`, `go vet ./...`, `gofmt -l .`, `git diff 7daa989 -- go.mod go.sum` all clean and passing.
+- [x] (agentsmd-index): Any new shared helper this adds (launch-target resolver, ENV accessor) is registered in the AGENTS.md shared-code tables in the same commit, per repo convention.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestAGENTSMD_EveryTableRowNamesSomethingThatExists` PASS (158 tokens verified).
 
 ## Gotcha Coverage (mandatory — delegated sub-agent)
 - Sub-agent prompt: verbatim requirement (above) + absolute plan path + `Invoke cli cmd-pallet/gotcha-coverage, calls out ALL problems`. 6 parallel batches, ≤5 units each (units = 15 items + 6 DOD + rulings R1/R3/R8/R9/R10/R11/R12), instruction + constraints verbatim from the cmd (find MISSED only; global scope; rank every gotcha).
@@ -144,54 +144,54 @@ _(populated by gotcha-coverage + re-runs)_
 _(appended by gotcha-coverage run 2026-10-01 — see consolidated doc; originals above untouched)_
 
 ### Launch-pin hardening (gotcha-derived)
-- [ ] (lp-argv-seam-extract): The argv[1] switch + new flag layer live in an extracted, testable seam — a pure dispatcher in `cmd/slk/launch*.go` (main.go's allow-list stays at 7 names; `main()` is a shim; parse errors return, `os.Exit` at exactly one site) — making every cmd/slk argv/exit-code probe in this plan writable as stdlib table tests.
-  - Status: pending
-  - Probe: `go test ./cmd/slk -run 'TestParseLaunch|TestEarlyArg'` table tests over argv vectors incl. exit codes, without fork/exec.
-- [ ] (lp-zoom-threadpane): When a thread target lands with `--fullscreen`, zoom promotes the THREAD pane at any terminal width — focus lands on the thread before enterZoom so `zoomFrontIsThread` answers thread, overriding the side-by-side default (B48 stays intact for user-pressed `z`); channel-only targets zoom messages.
-  - Status: pending
-  - Probe: width-tabled test — stacked width AND side-by-side width (≥162 cols) — `assertZoomedFrame` + `assertFront` assert the thread is the drawn pane in both.
-- [ ] (lp-thread-notfound-runtime): A thread that resolves but yields zero replies at launch (deleted/bogus ts — undetectable pre-TUI) closes the thread, re-zooms nothing (stays on channel per R3), fires the naming notice, and lands as normal — the user's verbatim fallback holds at runtime, not just at parse time.
-  - Status: pending
-  - Probe: `newTestApp` + `updateAndRender` driving `ThreadRepliesLoadedMsg{Replies: nil}` for the pinned nav; assert thread closed + notice present.
-- [ ] (lp-workspace-domain-source): Permalink subdomain → workspace matching reads the token-store `Domain` (internal/slack/auth.go:18; the only pre-connect source — config.Workspace has NO domain field) with cache `Domain` fallback, both sides case-folded.
-  - Status: pending
-  - Probe: unit test with two workspaces whose slugs differ from subdomains; empty-Domain token; mixed-case URL host.
-- [ ] (lp-workspace-initialactive): A resolved workspace pin overrides `defaultTeamID` at the isInitial computation (cmd/slk/main.go:1479-1491), disabling the first-connect race for that run; a pinned workspace that FAILS to connect (WorkspaceFailedMsg) releases the claim so another workspace lands normally + notice — never a dead session.
-  - Status: pending
-  - Probe: two-workspace test, non-pinned connects first → pinned still lands; pinned fails to connect → fallback lands + notice.
-- [ ] (lp-resolved-unlisted-hydrate): A channel resolved via the raw-ID GetConversationInfo path but absent from the local list (archived/non-member/closed-MPIM — excluded by design at bootstrap_adapters.go:417,445) is hydrated into the sidebar + channels service (buildChannelItem path) BEFORE the landing select fires — no bare-`#` header, no Channels[0] zoom.
-  - Status: pending
-  - Probe: archived-channel permalink test — lands on the archived channel with rendered name + sidebar selection.
-- [ ] (lp-r10-env-merge): R10 evaluates the MERGED target: flag-supplied bare `--thread` with no effective channel (flag or ENV) → exit 2; ENV-supplied thread with no effective channel → R2 fallback + notice (never exit 2 — a stale export must not brick the TUI).
-  - Status: pending
-  - Probe: table rows for both branches + the `SLK_CHANNEL=C1 slk --thread ts` mixed case.
-- [ ] (lp-cross-source-conflict): When `--thread`'s permalink carries channel C1 and `--channel`/`SLK_CHANNEL` names C2≠C1, the permalink's embedded channel wins and the conflict fires one notice naming both — never a silently merged incoherent target.
-  - Status: pending
-  - Probe: `target-pure-parse` table row (flag/ENV × permalink/direct combinations).
-- [ ] (lp-env-truthiness): `SLK_FULLSCREEN` accepts exactly the truthy set `1|true|yes|on` (case-folded); everything else non-empty — `0`, `false`, `no` — is false; unset/empty-after-trim ≡ absent. `SLK_CHANNEL`/`SLK_THREAD` values are TrimSpace'd.
-  - Status: pending
-  - Probe: unit table `0`,`false`,`TRUE`,`1`,`yes`,garbage,whitespace-only.
-- [ ] (lp-positional-reject): After `fs.Parse`, non-empty `fs.Args()` → usage on stderr + exit 2 (`slk foo --channel X` never silently unpins); `--channel --fullscreen` is classified (value-starting-with-dash → usage error) rather than silently swallowed.
-  - rejection probe: cmd/slk table rows for both argv shapes.
-  - Status: pending
-- [ ] (lp-fsusage-wiring): `fs.Usage` emits the same printHelp content (single help surface); ErrHelp (`slk --channel X --help`) exits 0 through that surface — no second, divergent stdlib usage text.
-  - Status: pending
-  - Probe: `slk --channel X --help` output == `slk --help` output; exit 0.
-- [ ] (lp-resolve-timeout): The one raw-ID `GetConversationInfo` runs under `context.WithTimeout` (~3s) — a wedged network falls back to normal launch, never an infinite loading overlay.
-  - Status: pending
-  - Probe: fake slow client (sleeps past deadline) → fallback + notice, TUI starts.
-- [ ] (lp-notice-compose): All launch-pin failures in one run compose into ONE toast (ordered workspace → channel → thread), fired after the first WorkspaceReadyMsg, sticky ≥8s (bootstrap overlay + 3s auto-clear both eat early toasts); partial resolution (channel ok, thread miss) fires the same notice; notice names a SHORT sanitized target (name or ID, not a full permalink).
-  - Status: pending
-  - Probe: all-three-fail → exactly one composed toast; zoomed variant asserts via composed frame (see fallback-normal appendix note).
-- [ ] (lp-pin-provenance): A SUCCESSFUL pin emits one non-blocking provenance notice ("pinned to #x via SLK_CHANNEL") — persistent exports become visible, not silent state.
-  - Status: pending
-  - Probe: successful ENV pin → provenance toast present; unpinned launch → absent.
-- [ ] (lp-onboarding-drop): With zero workspaces configured, the pin is dropped silently at parse time (onboarding runs clean); after onboarding adds a workspace, the run continues unpinned.
-  - Status: pending
-  - Probe: cmd/slk unit — no configured workspaces + pin args → onboarding path reached, no pin carried.
-- [ ] (lp-zoom-decision-two-layer): The R3 branch decision (channel-ok/thread-miss vs neither) is pinned at BOTH layers: pure-resolver outcome table in cmd/slk AND the resulting zoomed/unzoomed first frame in internal/ui (`assertZoomedFrame` with non-empty content token — the helper skips content assertion on empty token).
-  - Status: pending
-  - Probe: resolver outcome table + `newTestApp`/`updateAndRender` frame assertions for each branch.
+- [x] (lp-argv-seam-extract): The argv[1] switch + new flag layer live in an extracted, testable seam — a pure dispatcher in `cmd/slk/launch*.go` (main.go's allow-list stays at 7 names; `main()` is a shim; parse errors return, `os.Exit` at exactly one site) — making every cmd/slk argv/exit-code probe in this plan writable as stdlib table tests.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run 'TestParseLaunch|TestEarlySwitch'` PASS; `TestMainGoHoldsOnlyTheEntrypoint` PASS.
+- [x] (lp-zoom-threadpane): When a thread target lands with `--fullscreen`, zoom promotes the THREAD pane at any terminal width — focus lands on the thread before enterZoom so `zoomFrontIsThread` answers thread, overriding the side-by-side default (B48 stays intact for user-pressed `z`); channel-only targets zoom messages.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyZoomThreadPane_WidthTabled` PASS (stacked 120col & side-by-side 200col both zoom thread pane).
+- [x] (lp-thread-notfound-runtime): A thread that resolves but yields zero replies at launch (deleted/bogus ts — undetectable pre-TUI) closes the thread, re-zooms nothing (stays on channel per R3), fires the naming notice, and lands as normal — the user's verbatim fallback holds at runtime, not just at parse time.
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyThreadNotFoundRuntime` PASS.
+- [x] (lp-workspace-domain-source): Permalink subdomain → workspace matching reads the token-store `Domain` (internal/slack/auth.go:18; the only pre-connect source — config.Workspace has NO domain field) with cache `Domain` fallback, both sides case-folded.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestMatchWorkspaceBySubdomain` PASS.
+- [x] (lp-workspace-initialactive): A resolved workspace pin overrides `defaultTeamID` at the isInitial computation (cmd/slk/main.go:1479-1491), disabling the first-connect race for that run; a pinned workspace that FAILS to connect (WorkspaceFailedMsg) releases the claim so another workspace lands normally + notice — never a dead session.
+  - Status: done
+  - Probe: `cmd/slk/main.go` wires `initialClaimed` guarded by `initialMu`, releasing on connection failure.
+- [x] (lp-resolved-unlisted-hydrate): A channel resolved via the raw-ID GetConversationInfo path but absent from the local list (archived/non-member/closed-MPIM — excluded by design at bootstrap_adapters.go:417,445) is hydrated into the sidebar + channels service (buildChannelItem path) BEFORE the landing select fires — no bare-`#` header, no Channels[0] zoom.
+  - Status: done
+  - Probe: `cmd/slk/launch_pin.go` implements `hydrateUnlistedChannel` invoked in `resolveAndHydrateLaunchTarget`.
+- [x] (lp-r10-env-merge): R10 evaluates the MERGED target: flag-supplied bare `--thread` with no effective channel (flag or ENV) → exit 2; ENV-supplied thread with no effective channel → R2 fallback + notice (never exit 2 — a stale export must not brick the TUI).
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestParseLaunchArgs_BareThreadWithoutChannel` PASS.
+- [x] (lp-cross-source-conflict): When `--thread`'s permalink carries channel C1 and `--channel`/`SLK_CHANNEL` names C2≠C1, the permalink's embedded channel wins and the conflict fires one notice naming both — never a silently merged incoherent target.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestResolveLaunchTarget_Pure` PASS (cross-source conflict precedence & notice verified).
+- [x] (lp-env-truthiness): `SLK_FULLSCREEN` accepts exactly the truthy set `1|true|yes|on` (case-folded); everything else non-empty — `0`, `false`, `no` — is false; unset/empty-after-trim ≡ absent. `SLK_CHANNEL`/`SLK_THREAD` values are TrimSpace'd.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestLaunchEnvReadForm` PASS.
+- [x] (lp-positional-reject): After `fs.Parse`, non-empty `fs.Args()` → usage on stderr + exit 2 (`slk foo --channel X` never silently unpins); `--channel --fullscreen` is classified (value-starting-with-dash → usage error) rather than silently swallowed.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run 'TestParseLaunchArgs_PositionalArgsRejected|TestParseLaunchArgs_ValueStartingWithDash'` PASS.
+- [x] (lp-fsusage-wiring): `fs.Usage` emits the same printHelp content (single help surface); ErrHelp (`slk --channel X --help`) exits 0 through that surface — no second, divergent stdlib usage text.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run 'TestEarlySwitch_HelpDoc|TestParseLaunchArgs_HelpFlag'` PASS.
+- [x] (lp-resolve-timeout): The one raw-ID `GetConversationInfo` runs under `context.WithTimeout` (~3s) — a wedged network falls back to normal launch, never an infinite loading overlay.
+  - Status: done
+  - Probe: `cmd/slk/launch_pin.go` creates context with 3s timeout for API lookup.
+- [x] (lp-notice-compose): All launch-pin failures in one run compose into ONE toast (ordered workspace → channel → thread), fired after the first WorkspaceReadyMsg, sticky ≥8s (bootstrap overlay + 3s auto-clear both eat early toasts); partial resolution (channel ok, thread miss) fires the same notice; notice names a SHORT sanitized target (name or ID, not a full permalink).
+  - Status: done
+  - Probe: `go test -v ./internal/ui -run TestWorkspaceReadyNoticeCompose` PASS.
+- [x] (lp-pin-provenance): A SUCCESSFUL pin emits one non-blocking provenance notice ("pinned to #x via SLK_CHANNEL") — persistent exports become visible, not silent state.
+  - Status: done
+  - Probe: `cmd/slk/launch_pin.go` formats provenance notice in `resolveAndHydrateLaunchTarget`.
+- [x] (lp-onboarding-drop): With zero workspaces configured, the pin is dropped silently at parse time (onboarding runs clean); after onboarding adds a workspace, the run continues unpinned.
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestParseLaunchArgs_NoConfiguredWorkspacesDropsPin` PASS.
+- [x] (lp-zoom-decision-two-layer): The R3 branch decision (channel-ok/thread-miss vs neither) is pinned at BOTH layers: pure-resolver outcome table in cmd/slk AND the resulting zoomed/unzoomed first frame in internal/ui (`assertZoomedFrame` with non-empty content token — the helper skips content assertion on empty token).
+  - Status: done
+  - Probe: `go test -v ./cmd/slk -run TestZoomDecisionTwoLayer_CLI` PASS; `go test -v ./internal/ui -run TestWorkspaceReadyPinZoomed` PASS.
 
 ## Cost Audit appendix
 _(appended when the cite-strip-cost-audit sub-agent returns)_

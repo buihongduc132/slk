@@ -133,6 +133,12 @@ var reduceChannels reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 		// (completePendingLinkNav selects in a.messagepane), so keep
 		// the legacy active-channel gate.
 		if m.ChannelID == a.activeChannelID {
+			if a.launchPinFullscreen && a.pendingLinkNav == nil {
+				// Channel-only pin (or R3 channel-ok/thread-miss):
+				// content just landed in the pane above, so this is
+				// the first frame it is safe to zoom (land-ordering).
+				a.enterLaunchPinZoom(false)
+			}
 			return a.completePendingLinkNav(m.ChannelID, true), true
 		}
 		return nil, true
@@ -182,10 +188,18 @@ var reduceChannels reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 			}
 		}
 		if !found {
+			if a.launchPinFullscreen {
+				// Select-message jump missed: R3 says zoom the channel
+				// (messages pane), not a partially-selected state.
+				a.enterLaunchPinZoom(false)
+			}
 			return func() tea.Msg { return ToastMsg{Text: "Message not found in loaded history"} }, true
 		}
 		a.messagepane.SetMessages(m.Messages)
 		a.messagepane.SelectByTS(m.TargetTS)
+		if a.launchPinFullscreen {
+			a.enterLaunchPinZoom(false)
+		}
 		return nil, true
 
 	case ChannelMarkedRemoteMsg:
@@ -329,6 +343,9 @@ func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 	// pane, and a shorter new channel makes that index out of range. Placed
 	// after the upload guard, which returns without applying the switch.
 	a.clearZoom()
+	if a.activeChannelID != "" && m.ID != a.activeChannelID {
+		a.dropLaunchPin()
+	}
 	// Perf instrumentation: wall-clock the synchronous portion of the
 	// channel-switch reducer. This covers everything up to and including
 	// the tier decision, but NOT the subsequent View() (which triggers
@@ -418,6 +435,10 @@ func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 		a.statusbar.SetSyncing(false)
 		debuglog.Cache("ChannelSelectedMsg: channel=%s tier=1_fresh", m.ID)
 		tier = "1_fresh"
+		if a.launchPinFullscreen && a.pendingLinkNav == nil {
+			a.enterZoom()
+			a.launchPinFullscreen = false
+		}
 		if len(cached) == 0 {
 			return nil, false
 		}
@@ -445,6 +466,10 @@ func reduceChannelSelected(a *App, m ChannelSelectedMsg) (tea.Cmd, bool) {
 		a.statusbar.SetSyncing(true)
 		debuglog.Cache("ChannelSelectedMsg: channel=%s tier=2_verify", m.ID)
 		tier = "2_verify"
+		if a.launchPinFullscreen && a.pendingLinkNav == nil {
+			a.enterZoom()
+			a.launchPinFullscreen = false
+		}
 		return fetchCmd(), true
 
 	default:

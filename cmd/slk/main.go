@@ -43,6 +43,7 @@ import (
 	"github.com/gammons/slk/internal/ui/workspace"
 	versionpkg "github.com/gammons/slk/internal/version"
 	"github.com/gammons/slk/internal/wake"
+
 	"golang.design/x/clipboard"
 	"golang.org/x/term"
 )
@@ -70,48 +71,13 @@ func main() {
 		defer debugFile.Close()
 		debuglog.General("=== slk debug session started ===")
 	}
-	// Handle simple flags before anything else
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "--version", "-v", "version":
-			fmt.Printf("slk %s (commit %s, built %s)\n", version, commit, date)
-			fmt.Println("Unofficial Slack client. Not affiliated with Slack Technologies, LLC.")
-			fmt.Println("Uses Slack's internal browser protocol; may violate Slack's TOS. Use at your own risk.")
-			return
-		case "--help", "-h", "help":
-			printHelp()
-			return
-		case "--add-workspace":
-			if err := addWorkspace(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "--remove-workspace":
-			if err := removeWorkspace(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "--list-workspaces":
-			if err := listWorkspaces(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
-		case "--dump-sections":
-			if err := dumpSections(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
-		case "--dump-prefs":
-			if err := dumpPrefs(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
+	// Handle early switches, flags, and launch target resolution (lp-argv-seam-extract)
+	action, exitCode, launchTarget, _ := parseLaunchArgs(os.Args[1:], os.Stdout, os.Stderr, nil, nil)
+	if action == EarlyArgHandled {
+		if exitCode != 0 {
+			os.Exit(exitCode)
 		}
+		return
 	}
 
 	// Load config early (best-effort) so we can pre-detect the image
@@ -150,30 +116,14 @@ func main() {
 		}
 	}
 
-	if err := run(); err != nil {
+	if err := run(launchTarget); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func printHelp() {
-	fmt.Printf(`slk %s -- a blazingly fast Slack TUI
-
-Usage:
-  slk                    Launch the TUI
-  slk --add-workspace     Add a Slack workspace (interactive)
-  slk --remove-workspace  Remove a configured workspace (interactive)
-  slk --list-workspaces   List configured workspaces (TeamID, Slug, Name)
-  slk --dump-sections     Dump raw users.channelSections.list JSON (diagnostic)
-  slk --version          Print version and exit
-  slk --help             Show this help
-
-Config:  ~/.config/slk/config.toml
-Data:    ~/.local/share/slk/
-Cache:   ~/.cache/slk/
-
-Docs:    https://github.com/gammons/slk
-`, version)
+	printHelpTo(os.Stdout)
 }
 
 // newImageHTTPClient builds the HTTP client the avatar/thumbnail
@@ -188,7 +138,7 @@ func newImageHTTPClient() *http.Client {
 	return c
 }
 
-func run() error {
+func run(target *LaunchTarget) error {
 	// Resolve XDG paths
 	configDir := xdgConfig()
 	dataDir := xdgData()
@@ -1405,12 +1355,25 @@ func run() error {
 		}
 	}
 
+	// Match permalink workspace subdomain against configured workspaces (lp-workspace-domain-source)
+	if target != nil && target.WorkspaceHint != "" {
+		cacheWorkspaces, _ := db.ListWorkspaces()
+		if matchedTeamID, ok := matchWorkspaceBySubdomain(target.WorkspaceHint, tokens, cacheWorkspaces); ok {
+			defaultTeamID = matchedTeamID
+			target.PinnedTeamID = matchedTeamID
+		} else {
+			wsNotice := fmt.Sprintf("workspace %q not configured; using default", target.WorkspaceHint)
+			target.Notice = composeNotice(target.Notice, wsNotice)
+		}
+	}
+
 	// firstReady gates the "first workspace to connect wins" logic when
 	// no default_workspace is configured. sync.Once ensures exactly one
 	// connect goroutine claims the initial active slot, eliminating the
 	// race where two simultaneous WorkspaceReadyMsgs both observed no
 	// active workspace yet and both set InitialActive=true.
 	var firstReady sync.Once
+	var initialMu sync.Mutex
 
 	// Start the TUI immediately (shows loading overlay). All output —
 	// every protocol — flows through the frame-correlated writer: it is
@@ -1465,7 +1428,54 @@ func run() error {
 				// nothing at all.
 				log.Printf("workspace %s failed to connect: %v", tok.TeamName, err)
 				debuglog.General("workspace %s failed to connect: %v", tok.TeamName, err)
+				initialMu.Lock()
+				releasedPin := false
+				if defaultTeamID != "" && tok.TeamID == defaultTeamID {
+					defaultTeamID = ""
+					releasedPin = true
+				}
+				initialMu.Unlock()
 				p.Send(ui.WorkspaceFailedMsg{TeamName: tok.TeamName})
+				if releasedPin {
+					// lp-workspace-initialactive, the second half: the pinned
+					// workspace's claim is released, but every OTHER
+					// workspace may have connected while the claim stood and
+					// therefore never claimed InitialActive. Promote one now
+					// so the session is never dead — a WorkspaceSwitchedMsg
+					// lands a connected workspace exactly like a user switch.
+					if fallback := router.All(); len(fallback) > 0 {
+						wctx := fallback[0]
+						external := map[string]bool{}
+						if users, err := db.ListUsers(wctx.TeamID); err == nil {
+							for _, u := range users {
+								if u.IsExternal {
+									external[u.ID] = true
+								}
+							}
+						}
+						statuses := cachedPeerStatuses(db, wctx.TeamID)
+						wctx.PeerStatus.SeedHuddles(statuses)
+						channels := withPeerStatuses(wctx.Channels, statuses)
+						snap := workspacesStore.Snapshot()
+						p.Send(ui.WorkspaceSwitchedMsg{
+							TeamID:           wctx.TeamID,
+							TeamName:         wctx.TeamName,
+							Domain:           wctx.Client.TeamSubdomain(),
+							Theme:            snap.ResolveTheme(wctx.TeamID),
+							SidebarWidth:     snap.ResolveWidth(wctx.TeamID),
+							Channels:         channels,
+							FinderItems:      wctx.FinderItems,
+							UserNames:        wctx.UserNames,
+							UserStatuses:     statuses,
+							ExternalUsers:    external,
+							UserID:           wctx.UserID,
+							CustomEmoji:      wctx.CustomEmoji(),
+							UserGroups:       wctx.UserGroups(),
+							SectionsProvider: sectionsProviderAdapter{store: wctx.SectionStore},
+						})
+						p.Send(ui.ToastMsg{Text: "launch workspace failed; landed on " + wctx.TeamName})
+					}
+				}
 				return
 			}
 
@@ -1477,6 +1487,7 @@ func run() error {
 			// workspace claims active. Otherwise the first to connect
 			// claims it.
 			isInitial := false
+			initialMu.Lock()
 			if defaultTeamID != "" {
 				if wctx.TeamID == defaultTeamID {
 					isInitial = true
@@ -1489,6 +1500,7 @@ func run() error {
 					router.Set(wctx)
 				})
 			}
+			initialMu.Unlock()
 
 			// Build channel lookup maps for notifications
 			channelNames := make(map[string]string, len(wctx.Channels))
@@ -1562,6 +1574,16 @@ func run() error {
 
 			readyStatuses := cachedPeerStatuses(db, wctx.TeamID)
 			wctx.PeerStatus.SeedHuddles(readyStatuses)
+			pinChID := ""
+			pinThreadTS := ""
+			pinMsgTS := ""
+			pinFullscreen := false
+			launchNotice := ""
+
+			if isInitial && target != nil {
+				pinChID, pinThreadTS, pinMsgTS, pinFullscreen, launchNotice = resolveAndHydrateLaunchTarget(ctx, target, wctx, cfgSnap)
+			}
+
 			// fs/emoji cold start (B18): the seed is SYNCHRONOUS and the
 			// fetch is not. WorkspaceReadyMsg reads wctx.CustomEmoji()
 			// a few lines below, so seeding in a goroutine made the
@@ -1587,6 +1609,11 @@ func run() error {
 				SectionsProvider: sectionsProviderAdapter{store: wctx.SectionStore},
 				InitialActive:    isInitial,
 				LastChannelID:    mostRecentlyVisitedChannel(wctx.LastVisitedByChannel),
+				PinChannelID:     pinChID,
+				PinThreadTS:      pinThreadTS,
+				PinMessageTS:     pinMsgTS,
+				PinFullscreen:    pinFullscreen,
+				LaunchNotice:     launchNotice,
 			})
 
 			// Fetch the workspace's custom emoji in the background. When

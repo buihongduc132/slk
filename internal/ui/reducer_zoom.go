@@ -210,6 +210,7 @@ func (a *App) exitZoom() {
 		a.focusedPanel = PanelThread
 	}
 	a.zoomSavedThreadFocus = false
+	a.launchPinThreadZoom = false
 }
 
 // clearZoom drops zoom WITHOUT restoring the saved viewport, for the
@@ -238,6 +239,7 @@ func (a *App) clearZoom() {
 	}
 	a.zoomed = false
 	a.zoomSavedThreadFocus = false
+	a.launchPinThreadZoom = false
 	a.disarmPendingChords()
 	a.invalidateZoomCaches()
 }

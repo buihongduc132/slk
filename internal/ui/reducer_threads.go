@@ -159,6 +159,19 @@ var reduceThreads reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 		// transient blip doesn't blank a successfully-rendered
 		// cached thread view.
 		if m.Replies == nil {
+			launchPinMiss := (linkNav != nil && linkNav.isLaunchPin) ||
+				(linkNav == nil && a.launchPinThreadTS != "" && a.launchPinThreadTS == m.ThreadTS)
+			if launchPinMiss {
+				// lp-thread-notfound-runtime: bogus/deleted ts is
+				// undetectable pre-TUI. Close the thread, RE-ZOOM NOTHING
+				// (stays on channel per R3), fire the naming notice, and
+				// land as normal — the verbatim fallback at runtime, not
+				// just at parse time.
+				a.dropLaunchPin()
+				a.CloseThread()
+				a.pendingLinkNav = nil
+				return a.uploadToastCmd("thread not found: "+m.ThreadTS, 8*time.Second, toastEager), true
+			}
 			return nil, true
 		}
 		channelID := a.threadPanel.ChannelID()
@@ -184,6 +197,15 @@ var reduceThreads reducerFunc = func(a *App, msg tea.Msg) (tea.Cmd, bool) {
 					}
 				}
 			}
+		}
+		// Launch-pin zoom fires here, after the thread's replies landed
+		// (land-zoomed + lp-zoom-threadpane): promoting the pane before
+		// the parent row is backfilled would snapshot an empty pane.
+		// Focus lands on the thread BEFORE enterZoom so the promoted
+		// pane is the interactive one.
+		if (linkNav != nil && linkNav.isLaunchPin) || (a.launchPinFullscreen && a.launchPinThreadTS == m.ThreadTS) {
+			a.focusedPanel = PanelThread
+			a.enterLaunchPinZoom(true)
 		}
 
 		// Mark the thread as read now that the user has actually

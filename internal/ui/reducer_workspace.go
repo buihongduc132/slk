@@ -230,17 +230,46 @@ func reduceWorkspaceReady(a *App, m WorkspaceReadyMsg) tea.Cmd {
 		a.statusbar.SetStatus(pres, dndEnabled, dndEnd)
 		a.workspaceRail.SelectByID(m.TeamID)
 		if len(m.Channels) > 0 {
-			// Restore the last-visited channel across restarts (persisted in
-			// channel_visits). Falls back to the first sidebar entry when
-			// there's no recorded visit or the channel no longer exists.
+			// Restore the pinned channel or last-visited channel across restarts
+			// (persisted in channel_visits). Falls back to the first sidebar entry
+			// when there's no recorded visit or the channel no longer exists.
 			target := m.Channels[0]
-			if m.LastChannelID != "" {
+			foundPin := false
+			if m.PinChannelID != "" {
+				for _, ch := range m.Channels {
+					if ch.ID == m.PinChannelID {
+						target = ch
+						foundPin = true
+						break
+					}
+				}
+			}
+			if !foundPin && m.LastChannelID != "" {
 				for _, ch := range m.Channels {
 					if ch.ID == m.LastChannelID {
 						target = ch
 						break
 					}
 				}
+			}
+			if (foundPin || m.PinChannelID == "") && (m.PinThreadTS != "" || m.PinMessageTS != "") {
+				effectiveMsgTS := m.PinMessageTS
+				if effectiveMsgTS == "" {
+					effectiveMsgTS = m.PinThreadTS
+				}
+				a.pendingLinkNav = &pendingLinkNav{
+					channelID:   target.ID,
+					threadTS:    m.PinThreadTS,
+					messageTS:   effectiveMsgTS,
+					teamID:      m.TeamID,
+					isLaunchPin: true,
+				}
+			}
+			if foundPin || m.PinChannelID == "" {
+				a.launchPinFullscreen = m.PinFullscreen
+				a.launchPinThreadTS = m.PinThreadTS
+			} else {
+				a.dropLaunchPin()
 			}
 			a.sidebar.SelectByID(target.ID)
 			a.messagepane.SetLoading(true)
@@ -249,6 +278,9 @@ func reduceWorkspaceReady(a *App, m WorkspaceReadyMsg) tea.Cmd {
 			batch = append(batch, func() tea.Msg {
 				return ChannelSelectedMsg{ID: target.ID, Name: target.Name, Type: target.Type}
 			})
+		}
+		if m.LaunchNotice != "" {
+			batch = append(batch, a.uploadToastCmd(m.LaunchNotice, 8*time.Second, toastEager))
 		}
 		// Prime the sidebar Activity badge on connect (the feed is a
 		// network call scoped to the active workspace, so — unlike the

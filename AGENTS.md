@@ -109,6 +109,8 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Peer custom status, DND and huddle rendering | `ui/peerstatus` (`Status`, glyph/expiry/summary methods); `messages.AuthorStatusSuffix` for author headers |
 | Usergroup map helpers | `usergroups.Copy`, `usergroups.Equal`, `usergroups.Display` |
 | Copy text to the clipboard | `App.clipboardWrite` / `SetClipboardWriter`; `cmd/slk/newClipboardWriter` selects local macOS `pbcopy` or terminal OSC 52 |
+| Parse slk launch pins (`--channel`/`--thread`/`--fullscreen` + `SLK_CHANNEL`/`SLK_THREAD`/`SLK_FULLSCREEN`) | `cmd/slk.parseLaunchArgs` (argv+ENV → `LaunchTarget`, exit-code seams) + `resolveLaunchTarget` (pure classification); the SLK_* vars are read via `readLaunchEnv` ONLY — no second `os.Getenv` spelling |
+| Resolve a launch pin's channel (local list → one bounded `conversations.info`) | `cmd/slk.resolveChannelTarget` (+ `resolveAndHydrateLaunchTarget`, which also hydrates unlisted channels via `buildChannelItem`); workspace routing via `matchWorkspaceBySubdomain` (token `Domain` first, cache fallback, case-folded) |
 
 ### UI chrome
 
@@ -123,6 +125,13 @@ scrollbars, date formatting, case folding, or ID formatting: it already exists.
 | Channel/DM destination picker for forwarding | `channelfinder.Model.OpenForForwarding()` (joined conversations only); `Open()` restores the normal switcher |
 | Enter / leave fullscreen pane zoom | `App.enterZoom`, `App.exitZoom` (`internal/ui/reducer_zoom.go`). **Never assign `a.zoomed` directly** — `exitZoom` also invalidates the zoom-keyed caches and restores the saved viewport, and a second hand-rolled exit in `mode_insert.go` was doing neither |
 | Which pane a Compute call should treat as in front | `App.layoutThreadFront()` (`internal/ui/app.go`) — resolves through `zoomFrontIsThread` while zoomed, `threadInFront` otherwise. `windowBounds` is the one deliberate exception (hardcodes `false`) |
+
+### CLI and launch helpers (`cmd/slk`)
+
+| Need | Use |
+|---|---|
+| Parse CLI flags and environment variables for launch targeting | `parseLaunchArgs` (`cmd/slk/launch_pin.go`) |
+| Resolve workspace, channel, thread, and fullscreen launch targets | `resolveAndHydrateLaunchTarget` (`cmd/slk/launch_pin.go`) |
 
 ### Test helpers
 

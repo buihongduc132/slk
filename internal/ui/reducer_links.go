@@ -32,6 +32,7 @@ type pendingLinkNav struct {
 	threadOpened bool
 	loadsDone    int
 	fetchApplied bool
+	isLaunchPin  bool
 }
 
 // Only permalink loads carry this envelope; ordinary thread refreshes must
@@ -139,6 +140,10 @@ func (a *App) completePendingLinkNav(channelID string, authoritative bool) tea.C
 	}
 	if a.messagepane.SelectByTS(p.messageTS) {
 		a.pendingLinkNav = nil
+		if a.launchPinFullscreen {
+			a.enterZoom()
+			a.launchPinFullscreen = false
+		}
 		return nil
 	}
 	if authoritative {
