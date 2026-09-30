@@ -128,7 +128,17 @@ Plan done when ALL below true:
 
 ## Proof (per implemented item — capture, not prose)
 - (none yet — plan is pre-implementation; first probes recorded at gotcha time: os.Args switch `cmd/slk/main.go:74-115`, slackurl.Parse `internal/slackurl/slackurl.go:43-64`, WorkspaceReadyMsg fields `internal/ui/msgs.go:396-404`, openThreadForPermalink `internal/ui/reducer_links.go:155-178`, enterZoom guard `internal/ui/reducer_zoom.go:126-190`.)
-- Verifier-loop hash: (not yet — plan not done)
+- Verifier-loop hash: 84225d5 (gates re-run post-proof below)
+
+### Implementation proof (2026-10-01, final reconciliation)
+- Commits: 61081e4 (feature: cmd/slk argv+ENV seam, resolver, workspace routing, hydration, ui landing/zoom/thread fallback) → 33aee43 (fix: single help surface + usage-on-stderr for flag errors — real-binary smoke test caught `--channel X --help` printing twice) → 2a4ecba (chore: golangci-lint v2.13.1 clean: TrimPrefix x2, dead helpers) → 84225d5 (fix: restore readLaunchEnv as the R8 single read site).
+- Gates on final tree @ 84225d5: `go build ./...` PASS · `go vet ./...` PASS · `gofmt -l .` EMPTY · `golangci-lint run` (v2.13.1 built go1.26.1) 0 issues · `git diff 7daa989 HEAD -- go.mod go.sum` 0 lines · `go test ./... -race -count=1` 0 failures (full-suite log /tmp/race-final.log).
+- Test files: cmd/slk/launch_pin_test.go (519 lines: TestEarlySwitch_*, TestParseLaunchArgs*, TestMatchWorkspaceBySubdomain, TestResolveChannelTarget (+bounded-timeout), TestResolveLaunchTarget_Pure, TestZoomDecisionTwoLayer_CLI, TestLaunchEnvReadForm) · internal/ui/launch_pin_landing_test.go (TestWorkspaceReadyPinChannelWinsOverLastChannel, PinThread, PinZoomed, ZoomThreadPane_WidthTabled [stacked+side-by-side], ThreadNotFoundRuntime, NoticeCompose). Every plan-cited test name verified to exist + pass.
+- Real-binary smoke (go build -o /tmp/slk-test): --help/--version exit 0; --channel (missing value) / --thread w/o channel (R10) / --nonsense / positional argv / dash-leading value → exit 2 with usage; `--channel C1 --help` output byte-identical to `--help`, stderr empty (lp-fsusage-wiring).
+- R8 probe: `rg -l 'os\.Getenv\("SLK_(CHANNEL|THREAD|FULLSCREEN)"\)' -g '!*_test.go'` → exactly `cmd/slk/launch_pin.go` (readLaunchEnv).
+- R4 probe: `git diff 7daa989 HEAD | grep '^+.*a\.zoomed *='` → 0 Go-code matches (only plan-markdown lines).
+- AGENTS.md: launch-pin rows added to the shared-code table; `TestAGENTSMD_EveryTableRowNamesSomethingThatExists` PASS (158 tokens).
+- Post-commit reconciliation fixes found by verifier: fs.Usage double-print (33aee43), unknown-flag usage regression restored (33aee43), R8 read-site restore (84225d5), lint 5→0 (2a4ecba).
 
 ## Idempotency
 Re-running `/10-plan-declarative` on the same requirement reconciles to THIS plan. Implemented items auto-mark `- [x]` with proof. Pending items surface as work-remaining. Item prose is NEVER rewritten on re-run (status flips only); new items append.
