@@ -225,9 +225,15 @@ func TestParseLaunchArgs_ValueStartingWithDash(t *testing.T) {
 
 // lp-fsusage-wiring: --channel X --help exits 0 with the SAME help.
 func TestParseLaunchArgs_HelpFlag(t *testing.T) {
-	action, code, _, out, _ := runParse(t, []string{"--channel", "C1", "--help"}, nil)
+	action, code, _, out, errOut := runParse(t, []string{"--channel", "C1", "--help"}, nil)
 	if action != EarlyArgHandled || code != 0 {
 		t.Fatalf("action=%v code=%d, want handled/0", action, code)
+	}
+	if errOut != "" {
+		// lp-fsusage-wiring: the FlagSet's Usage callback must not print
+		// (stdlib invokes it before returning ErrHelp); a second help
+		// surface here doubles the text in the real binary.
+		t.Errorf("stderr not empty on the help path: %q", errOut)
 	}
 	_, _, _, plain, _ := runParse(t, []string{"--help"}, nil)
 	if out != plain {

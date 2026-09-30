@@ -168,9 +168,13 @@ func parseLaunchArgs(
 	// 2. Parse flags layer via stdlib flag.FlagSet (cli-flags-parse)
 	fs := flag.NewFlagSet("slk", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.Usage = func() {
-		printHelpTo(stderr)
-	}
+	// lp-fsusage-wiring: the FlagSet's Usage must NOT print — stdlib
+	// calls it BEFORE returning ErrHelp, so a printing Usage here makes
+	// `slk --channel X --help` emit the help text TWICE (once from
+	// Usage, once from the ErrHelp arm). The single help surface is the
+	// ErrHelp arm below (stdout, exit 0) and the explicit error paths
+	// (stderr + exit 2), each printing exactly once.
+	fs.Usage = func() {}
 
 	var flagChannel, flagThread string
 	var flagFullscreen bool
@@ -183,6 +187,11 @@ func parseLaunchArgs(
 			printHelpTo(stdout)
 			return EarlyArgHandled, 0, nil, nil
 		}
+		// Parse errors (unknown flag, missing value) exit 2 WITH usage
+		// (cli-flags-parse). Printed here rather than in fs.Usage: stdlib
+		// invokes Usage before returning ErrHelp, which would print the
+		// help twice on the --help path (lp-fsusage-wiring).
+		printHelpTo(stderr)
 		return EarlyArgHandled, 2, nil, err
 	}
 
