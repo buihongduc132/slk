@@ -117,6 +117,16 @@ func TestParseLaunchArgs(t *testing.T) {
 				t.Errorf("thread permalink: ThreadTS=%q", tgt.ThreadTS)
 			}
 		}},
+		{[]string{"--thread", "https://acme.slack.com/archives/C0123/p1234567890123456"}, func(t *testing.T, tgt *LaunchTarget) {
+			if tgt.ThreadTS != "1234567890.123456" || tgt.ChannelID != "C0123" {
+				t.Errorf("thread permalink without thread_ts query param: ThreadTS=%q ChannelID=%q", tgt.ThreadTS, tgt.ChannelID)
+			}
+		}},
+		{[]string{"--channel", "C0123", "--thread", "https://acme.slack.com/archives/C0123/p1234567890123456"}, func(t *testing.T, tgt *LaunchTarget) {
+			if tgt.ThreadTS != "1234567890.123456" || tgt.ChannelID != "C0123" {
+				t.Errorf("channel + thread permalink without thread_ts query param: ThreadTS=%q ChannelID=%q", tgt.ThreadTS, tgt.ChannelID)
+			}
+		}},
 		{[]string{"--fullscreen", "--channel", "C0123"}, func(t *testing.T, tgt *LaunchTarget) {
 			if !tgt.Fullscreen {
 				t.Error("fullscreen flag not set")

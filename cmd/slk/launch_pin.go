@@ -360,7 +360,11 @@ func resolveLaunchTarget(
 
 			if pl.ThreadTS != "" {
 				target.ThreadTS = string(pl.ThreadTS)
+				if pl.MessageTS != "" {
+					target.SelectMessageTS = string(pl.MessageTS)
+				}
 			} else if pl.MessageTS != "" {
+				target.ThreadTS = string(pl.MessageTS)
 				target.SelectMessageTS = string(pl.MessageTS)
 			}
 
@@ -370,7 +374,7 @@ func resolveLaunchTarget(
 				if plChan, ok := slackurl.Parse(rawChannel); ok {
 					explicitChan = string(plChan.ChannelID)
 				}
-				if !strings.EqualFold(explicitChan, threadChannelID) {
+				if rawChannelIDRegex.MatchString(explicitChan) && !strings.EqualFold(explicitChan, threadChannelID) {
 					conflictNotice = fmt.Sprintf("channel conflict: %s from permalink overrides %s", threadChannelID, explicitChan)
 				}
 			}
